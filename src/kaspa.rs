@@ -10,7 +10,7 @@ use kaspa_consensus_core::sign;
 use kaspa_consensus_core::subnets::SUBNETWORK_ID_NATIVE;
 use kaspa_consensus_core::tx::{PopulatedTransaction, Transaction, TransactionId, TransactionInput, TransactionOutpoint, TransactionOutput, UtxoEntry};
 use kaspa_grpc_client::GrpcClient;
-use kaspa_rpc_core::model::{RpcDataVerbosityLevel, RpcHash, RpcTransactionId};
+use kaspa_rpc_core::model::{RpcHash, RpcTransactionId};
 use kaspa_rpc_core::notify::mode::NotificationMode;
 use kaspa_txscript::pay_to_address_script;
 use rand::RngCore;
@@ -966,6 +966,8 @@ impl KaspaClient {
             return Ok(entry.transaction.payload);
         }
 
+        let tx_id_str = tx_id.to_string();
+
         let dag = self
             .client
             .get_block_dag_info()
@@ -978,8 +980,6 @@ impl KaspaClient {
         } else {
             dag.pruning_point_hash
         };
-
-        let page_limit: u64 = 50;
         for _page in 0..2000u32 {
             let response = {
                 let mut attempt: u32 = 0;
@@ -988,12 +988,13 @@ impl KaspaClient {
                     attempt += 1;
                     match self
                         .client
-                        .get_virtual_chain_from_block_v2(start_hash, Some(RpcDataVerbosityLevel::Full), Some(page_limit))
+                        .get_virtual_chain_from_block(start_hash, true, None)
                         .await
                     {
                         Ok(resp) => break resp,
                         Err(e) => {
                             let msg = e.to_string();
+
                             let is_timeout = msg.to_lowercase().contains("timeout");
                             if !is_timeout || attempt >= 10 {
                                 return Err(AudioTransferError::KaspaRpc(msg));
@@ -1005,27 +1006,35 @@ impl KaspaClient {
                 }
             };
 
-            for block in response.chain_block_accepted_transactions.iter() {
-                for tx in block.accepted_transactions.iter() {
+            for bucket in response.accepted_transaction_ids.iter() {
+                let is_target = bucket
+                    .accepted_transaction_ids
+                    .iter()
+                    .any(|id| id.to_string() == tx_id_str);
+                if !is_target {
+                    continue;
+                }
+
+                let block = self
+                    .client
+                    .get_block(bucket.accepting_block_hash, true)
+                    .await
+                    .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
+
+                for tx in block.transactions.iter() {
                     let is_target = tx
                         .verbose_data
                         .as_ref()
-                        .and_then(|v| v.transaction_id)
-                        .is_some_and(|id| id == tx_id);
+                        .is_some_and(|v| v.transaction_id.to_string() == tx_id_str);
                     if !is_target {
                         continue;
                     }
-                    let Some(p) = tx.payload.as_ref() else {
-                        return Err(AudioTransferError::KaspaRpc("Transaction payload missing".to_string()));
-                    };
-                    return Ok(p.clone());
+                    return Ok(tx.payload.clone());
                 }
             }
 
-            let added = response.added_chain_block_hashes.as_ref();
-            let Some(last) = added.last().copied() else {
-                break;
-            };
+            let added = &response.added_chain_block_hashes;
+            let Some(last) = added.last().copied() else { break; };
             if last == start_hash {
                 break;
             }
@@ -1100,7 +1109,6 @@ impl KaspaClient {
         } else {
             dag.pruning_point_hash
         };
-        let page_limit: u64 = 50;
 
         for _page in 0..2000u32 {
             let response = {
@@ -1110,13 +1118,14 @@ impl KaspaClient {
                     attempt += 1;
                     match self
                         .client
-                        .get_virtual_chain_from_block_v2(start_hash, Some(RpcDataVerbosityLevel::Full), Some(page_limit))
+                        .get_virtual_chain_from_block(start_hash, true, None)
                         .await
                     {
                         Ok(resp) => break resp,
                         Err(e) => {
                             let msg = e.to_string();
                             let is_timeout = msg.to_lowercase().contains("timeout");
+
                             if !is_timeout || attempt >= 10 {
                                 return Err(AudioTransferError::KaspaRpc(msg));
                             }
@@ -1127,13 +1136,23 @@ impl KaspaClient {
                 }
             };
 
-            for block in response.chain_block_accepted_transactions.iter() {
-                for tx in block.accepted_transactions.iter() {
-                    let Some(p) = tx.payload.as_ref() else { continue; };
+            for bucket in response.accepted_transaction_ids.iter() {
+                if chunks.iter().all(|c| c.is_some()) {
+                    break;
+                }
+
+                let block = self
+                    .client
+                    .get_block(bucket.accepting_block_hash, true)
+                    .await
+                    .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
+
+                for tx in block.transactions.iter() {
+                    let p = &tx.payload;
                     if let Some((file_id, idx, total, offset)) = Self::try_decode_chunk_header(p) {
                         if file_id == manifest.file_id && total == manifest.total_chunks {
                             let data_len = u32::from_le_bytes(p[29..33].try_into().unwrap()) as usize;
-                            if (idx as usize) < chunks.len() {
+                            if offset + data_len <= p.len() && (idx as usize) < chunks.len() {
                                 chunks[idx as usize] = Some(p[offset..offset + data_len].to_vec());
                             }
                         }
@@ -1145,10 +1164,8 @@ impl KaspaClient {
                 break;
             }
 
-            let added = response.added_chain_block_hashes.as_ref();
-            let Some(last) = added.last().copied() else {
-                break;
-            };
+            let added = &response.added_chain_block_hashes;
+            let Some(last) = added.last().copied() else { break; };
             if last == start_hash {
                 break;
             }
@@ -1170,7 +1187,7 @@ impl KaspaClient {
         &self,
         tx_id: &str,
         start_block_hash: Option<&str>,
-        min_confirmation_count: u64,
+        _min_confirmation_count: u64,
     ) -> Result<Option<String>> {
         let tx_id = TransactionId::from_str(tx_id)
             .map_err(|e| AudioTransferError::KaspaRpc(format!("Invalid transaction ID: {e}")))?;
@@ -1178,6 +1195,8 @@ impl KaspaClient {
         if self.client.get_mempool_entry(tx_id, true, false).await.is_ok() {
             return Ok(None);
         }
+
+        let tx_id_str = tx_id.to_string();
 
         let dag = self
             .client
@@ -1200,7 +1219,7 @@ impl KaspaClient {
                     attempt += 1;
                     match self
                         .client
-                        .get_virtual_chain_from_block(start_hash, true, Some(min_confirmation_count))
+                        .get_virtual_chain_from_block(start_hash, true, None)
                         .await
                     {
                         Ok(resp) => break resp,
@@ -1218,15 +1237,17 @@ impl KaspaClient {
             };
 
             for bucket in response.accepted_transaction_ids.iter() {
-                if bucket.accepted_transaction_ids.iter().any(|id| *id == tx_id) {
+                let found = bucket
+                    .accepted_transaction_ids
+                    .iter()
+                    .any(|id| id.to_string() == tx_id_str);
+                if found {
                     return Ok(Some(bucket.accepting_block_hash.to_string()));
                 }
             }
 
             let added = &response.added_chain_block_hashes;
-            let Some(last) = added.last().copied() else {
-                break;
-            };
+            let Some(last) = added.last().copied() else { break; };
             if last == start_hash {
                 break;
             }
