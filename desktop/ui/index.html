@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>Kaspa Audio Transfer</title>
+    <style>
+      :root {
+        --kaspa-primary: #70c7ba;
+        --kaspa-accent: #49eacb;
+        --bg-start: #0f1319;
+        --bg-mid: #141c26;
+        --surface: rgba(15, 21, 30, 0.72);
+        --border: rgba(112, 199, 186, 0.22);
+        --text: #e8f4f0;
+        --text-muted: #9fbac3;
+        --shadow: 0 24px 60px rgba(5, 12, 20, 0.45);
+      }
+
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: linear-gradient(135deg, var(--bg-start) 0%, var(--bg-mid) 100%);
+        color: var(--text);
+        display: grid;
+        place-items: center;
+      }
+
+      .panel {
+        width: min(720px, 92vw);
+        padding: 28px;
+        border-radius: 18px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow);
+      }
+
+      .title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 12px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+
+      .bolt {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--kaspa-accent) 0%, var(--kaspa-primary) 100%);
+        box-shadow: 0 16px 30px rgba(73, 234, 203, 0.28);
+        display: grid;
+        place-items: center;
+        color: #03181a;
+        font-weight: 900;
+      }
+
+      .status {
+        margin: 0;
+        color: var(--text-muted);
+        line-height: 1.5;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-top: 18px;
+      }
+
+      .pill {
+        font-size: 12px;
+        padding: 8px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(15, 21, 30, 0.55);
+        color: var(--text-muted);
+      }
+
+      .spinner {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 2px solid rgba(159, 186, 195, 0.28);
+        border-top-color: var(--kaspa-accent);
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      .error {
+        margin-top: 12px;
+        color: #ffb4b4;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="panel">
+      <div class="title">
+        <div class="brand">
+          <div class="bolt">⚡</div>
+          <div>
+            <div>Kaspa Audio Transfer</div>
+            <div style="font-size:12px;color:var(--text-muted);font-weight:600">Desktop</div>
+          </div>
+        </div>
+        <div class="pill" id="pill">
+          <span style="display:inline-flex;align-items:center;gap:8px;">
+            <span class="spinner" aria-hidden="true"></span>
+            <span id="pillText">Starting local service…</span>
+          </span>
+        </div>
+      </div>
+
+      <p class="status" id="status">
+        Launching your local Kaspa transfer service and preparing the interface.
+      </p>
+
+      <div class="error" id="error"></div>
+
+      <div class="row">
+        <div class="pill">This window will automatically continue when ready.</div>
+        <div class="pill" id="endpoint">http://localhost:8080</div>
+      </div>
+    </div>
+
+    <script>
+      const baseUrl = "http://localhost:8080";
+      const statusEl = document.getElementById("status");
+      const pillTextEl = document.getElementById("pillText");
+      const errorEl = document.getElementById("error");
+
+      async function ping() {
+        try {
+          const r = await fetch(`${baseUrl}/health`, { cache: "no-store" });
+          return r.ok;
+        } catch {
+          return false;
+        }
+      }
+
+      async function waitForBackend() {
+        const start = Date.now();
+        const timeoutMs = 30000;
+
+        while (Date.now() - start < timeoutMs) {
+          if (await ping()) {
+            pillTextEl.textContent = "Opening…";
+            statusEl.textContent = "Service is up. Loading the app…";
+            window.location.href = baseUrl;
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 500));
+        }
+
+        pillTextEl.textContent = "Not ready";
+        statusEl.textContent = "The local service did not start in time.";
+        errorEl.style.display = "block";
+        errorEl.textContent = "If you already have something using port 8080, close it and restart the desktop app.";
+      }
+
+      waitForBackend();
+    </script>
+  </body>
+</html>

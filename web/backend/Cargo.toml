@@ -1,0 +1,18 @@
+[package]
+name = "kaspa_file_web_backend"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.7", features = ["macros", "json", "multipart"] }
+tokio = { version = "1.37", features = ["macros", "rt-multi-thread", "process", "fs", "io-util"] }
+tokio-util = { version = "0.7", features = ["io"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tower = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+dotenvy = "0.15"
+tower-http = { version = "0.5", features = ["cors", "fs", "trace", "set-header"] }
+regex = "1"

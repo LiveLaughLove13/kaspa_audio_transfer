@@ -1,0 +1,21 @@
+
+# Rust/Cargo
+**/target/
+
+# Runtime/app temp
+tmp/
+**/tmp/
+
+# Rusty Kaspa dependency checkout (use submodule or separate clone)
+rusty-kaspa/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Node/Web
+**/node_modules/
+**/dist/
+**/.vite/

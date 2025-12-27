@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Kaspa File Transfer</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="style.css?v=5">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="sidebar-brand__dot" aria-hidden="true"></div>
+          <div class="sidebar-brand__text">Kaspa File Transfer</div>
+        </div>
+        <nav class="sidebar-nav" aria-label="Sections">
+          <button class="nav-item" type="button" data-target="choose">Start</button>
+          <button class="nav-item" type="button" data-target="estimate">Estimate</button>
+          <button class="nav-item" type="button" data-target="send">Send</button>
+          <button class="nav-item" type="button" data-target="receive">Receive</button>
+          <button class="nav-item" type="button" data-target="library">Library</button>
+          <button class="nav-item" type="button" data-target="next">How to</button>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="topbar-title">
+            <h1>Kaspa File Transfer</h1>
+            <p>Store and retrieve Data|File(s) directly on Kaspa L1.</p>
+          </div>
+          <div class="topbar-actions">
+            <button id="appRefreshBtn" class="btn-secondary" type="button">New session</button>
+          </div>
+        </header>
+
+        <p id="statusMessage" class="status status-banner"></p>
+
+        <div class="main-scroll" id="mainScroll">
+          <div class="content-grid">
+        <section id="sectionChoose" class="card" data-card-id="choose">
+          <div class="card-header">
+            <button class="card-toggle" type="button" aria-expanded="true" aria-label="Collapse section">
+              <span class="card-toggle__chevron" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="card-body">
+            <form id="estimateForm">
+            <div class="form-grid">
+            <label class="field">
+              <button class="field-label field-help" type="button" data-help-key="payerAddress">Your Kaspa address (Kaspa:)</button>
+              <input id="payerAddress" class="field-input" type="text" placeholder="kaspa:..." autocomplete="off" />
+            </label>
+            <label class="field">
+              <button class="field-label field-help" type="button" data-help-key="fromPrivateKey">Private key (Required)</button>
+              <input id="fromPrivateKey" class="field-input" type="password" placeholder="036a..." autocomplete="off" />
+            </label>
+            <label class="field">
+              <button class="field-label field-help" type="button" data-help-key="storageAmountKas">Storage amount (KAS)</button>
+              <input id="storageAmountKas" class="field-input" type="number" min="0" step="0.00000001" value="0" />
+            </label>
+            <label class="field">
+              <button class="field-label field-help" type="button" data-help-key="rpcUrl">RPC URL (optional)</button>
+              <input id="rpcUrl" class="field-input" type="text" placeholder="grpc://127.0.0.1:16110" autocomplete="off" />
+            </label>
+            </div>
+            <div id="dropZone" class="drop-zone">
+              <p id="dropZoneText">Drop a file here, or click to browse.</p>
+              <input id="fileInput" class="file-input" type="file" />
+            </div>
+            <button id="estimateBtn" class="btn-primary" disabled>Estimate cost</button>
+            </form>
+          </div>
+        </section>
+
+        <section id="resultSection" class="card hidden" data-card-id="estimate">
+          <div class="card-header">
+            <h2>2. Fee estimate</h2>
+            <button class="card-toggle" type="button" aria-expanded="true" aria-label="Collapse section">
+              <span class="card-toggle__chevron" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="card-body">
+            <dl class="result-list">
+            <div class="result-row">
+              <dt>File</dt>
+              <dd><span id="resultFileName"></span> (<span id="resultFileSize"></span>)</dd>
+            </div>
+            <div class="result-row">
+              <dt>Chunk count</dt>
+              <dd id="resultChunkCount"></dd>
+            </div>
+            <div class="result-row">
+              <dt>Total network fee (KAS)</dt>
+              <dd id="resultTotalFee"></dd>
+            </div>
+            <div class="result-row">
+              <dt>Effective cost per MiB (KAS)</dt>
+              <dd id="resultEffectiveCost"></dd>
+            </div>
+            <div class="result-row">
+              <dt>Expected amount (KAS)</dt>
+              <dd id="resultExpectedAmount"></dd>
+            </div>
+            <div class="result-row">
+              <dt>Payment address</dt>
+              <dd><code id="resultPaymentAddress"></code></dd>
+            </div>
+            <div class="result-row">
+              <dt>Job ID</dt>
+              <dd><code id="resultJobId"></code></dd>
+            </div>
+            <div class="result-row">
+              <dt>Status</dt>
+              <dd id="resultStatus"></dd>
+            </div>
+            </dl>
+          </div>
+        </section>
+
+        <section id="sectionSend" class="card" data-card-id="send">
+          <div class="card-header">
+            <button class="card-toggle" type="button" aria-expanded="true" aria-label="Collapse section">
+              <span class="card-toggle__chevron" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="card-body">
+            <label class="field">
+            <span class="field-label">Send destination</span>
+            <label class="status">
+              <input id="sendUsePaymentAddress" type="checkbox" />
+              Use payment address from the latest estimate
+            </label>
+            </label>
+            <div class="form-grid">
+            <label class="field">
+              <button class="field-label field-help" type="button" data-help-key="sendToAddress">To address</button>
+              <input id="sendToAddress" class="field-input" type="text" placeholder="kaspa:..." autocomplete="off" />
+            </label>
+            <label class="field">
+              <button class="field-label field-help" type="button" data-help-key="sendAmountKas">Amount (KAS)</button>
+              <input id="sendAmountKas" class="field-input" type="number" min="0" step="0.00000001" value="0" />
+            </label>
+            <label class="field">
+              <button class="field-label field-help" type="button" data-help-key="sendResumeFrom">Resume from (optional)</button>
+              <input id="sendResumeFrom" class="field-input" type="text" placeholder="txid" autocomplete="off" />
+            </label>
+            <label class="field">
+              <button class="field-label field-help" type="button" data-help-key="sendResumeOutputIndex">Resume output index</button>
+              <input id="sendResumeOutputIndex" class="field-input" type="number" min="1" step="1" value="1" />
+            </label>
+            </div>
+            <button id="sendBtn" class="btn-primary">Send file</button>
+            <p class="status">Transaction ID: <code id="sendTxId"></code></p>
+            <div class="send-progress">
+            <div class="send-progress__ring" id="sendProgressRing" aria-hidden="true">
+              <svg class="send-progress__ringSvg" viewBox="0 0 120 120">
+                <defs>
+                  <linearGradient id="sendProgressGradient" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#49eacb" />
+                    <stop offset="100%" stop-color="#70c7ba" />
+                  </linearGradient>
+                </defs>
+                <circle class="send-progress__ringTrack" cx="60" cy="60" r="52" />
+                <circle class="send-progress__ringValue" id="sendProgressRingValue" cx="60" cy="60" r="52" />
+              </svg>
+              <div class="send-progress__ringLabel" id="sendProgressRingLabel">0%</div>
+            </div>
+            <div class="send-progress__meta">
+              <p class="status">Chunk progress: <span id="sendProgressText"></span></p>
+              <progress id="sendProgressBar" class="progress" value="0" max="100"></progress>
+            </div>
+            </div>
+            <p class="status">Upload time: <span id="sendElapsed">00:00</span> <span id="sendEta"></span></p>
+          </div>
+        </section>
+
+        <section id="sectionReceive" class="card" data-card-id="receive">
+          <div class="card-header">
+            <button class="card-toggle" type="button" aria-expanded="true" aria-label="Collapse section">
+              <span class="card-toggle__chevron" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="card-body">
+            <div class="form-grid">
+            <label class="field">
+              <button class="field-label field-help" type="button" data-help-key="receiveTxId">Transaction ID</button>
+              <div class="field-row">
+                <input id="receiveTxId" class="field-input" type="text" placeholder="txid" autocomplete="off" />
+                <button id="receiveTxExplorerBtn" class="btn-secondary btn-small" type="button">Explorer</button>
+              </div>
+            </label>
+            <label class="field">
+              <button class="field-label field-help" type="button" data-help-key="receiveStartBlockHash">Start block hash (optional)</button>
+              <input id="receiveStartBlockHash" class="field-input" type="text" placeholder="block hash" autocomplete="off" />
+            </label>
+            <label class="field">
+              <button class="field-label field-help" type="button" data-help-key="receiveOutputName">Output name (required)</button>
+              <input id="receiveOutputName" class="field-input" type="text" placeholder="received.mp3" autocomplete="off" />
+            </label>
+            </div>
+            <button id="receiveBtn" class="btn-primary">Download received file</button>
+            <p class="status" id="receiveDownloadedInfo"></p>
+            <p class="status">Download time: <span id="receiveElapsed">00:00</span></p>
+          </div>
+        </section>
+
+        <section id="sectionLibrary" class="card" data-card-id="library">
+          <div class="card-header">
+            <h2>Library</h2>
+            <div class="card-header__actions">
+              <button id="libraryRefreshBtn" class="btn-secondary" type="button">Refresh</button>
+              <button class="card-toggle" type="button" aria-expanded="true" aria-label="Collapse section">
+                <span class="card-toggle__chevron" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <p class="status">Folder: <code id="libraryBaseDir"></code></p>
+            <div id="libraryEmpty" class="status hidden">No files yet.</div>
+            <div id="libraryList" class="library-list"></div>
+          </div>
+        </section>
+
+        <section id="sectionNext" class="card" data-card-id="next">
+          <div class="card-header">
+            <h2>5. How to (GUI Guide)</h2>
+            <button class="card-toggle" type="button" aria-expanded="true" aria-label="Collapse section">
+              <span class="card-toggle__chevron" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="card-body">
+            <p class="status">
+              This app lets you upload an audio file by splitting it into chunks and sending those chunks on-chain as Kaspa transactions.
+              Use the sidebar to switch between sections.
+            </p>
+
+            <h3>Start</h3>
+            <ol class="next-steps">
+              <li>
+                Select an audio file using the file picker.
+              </li>
+              <li>
+                Confirm the file details shown in the UI.
+              </li>
+              <li>
+                (Recommended) Run the estimate step first so you know the expected network fees before sending.
+              </li>
+            </ol>
+
+            <h3>Send</h3>
+            <ol class="next-steps">
+              <li>
+                Enter the recipient <strong>Kaspa address</strong> and the <strong>amount (KAS)</strong>.
+              </li>
+              <li>
+                Provide the sender key/wallet details required by your build (web vs desktop).
+              </li>
+              <li>
+                Click <strong>Send</strong> to start the upload.
+              </li>
+              <li>
+                Watch progress:
+                <ul>
+                  <li>The progress ring / bar shows how many chunks have been submitted.</li>
+                  <li>The persistent status line at the top shows global messages (queued, running, errors, etc.).</li>
+                </ul>
+              </li>
+              <li>
+                When finished, save the <strong>Manifest Transaction ID</strong> (this is the ID you use to download later).
+              </li>
+              <li>
+                If the send is interrupted, use <strong>Resume</strong> fields (resume-from txid + output index) to continue from where it left off.
+              </li>
+            </ol>
+
+            <h3>Receive</h3>
+            <ol class="next-steps">
+              <li>
+                Paste the <strong>Transaction ID</strong> you got after sending (usually the manifest txid).
+              </li>
+              <li>
+                Choose an <strong>Output name</strong> (example: <code>received.mp3</code>).
+              </li>
+              <li>
+                Optional: If you have a known <strong>start block hash</strong>, provide it to speed up scanning.
+              </li>
+              <li>
+                Click <strong>Download received file</strong> and wait for the download timer to complete.
+              </li>
+            </ol>
+
+            <h3>Library</h3>
+            <ol class="next-steps">
+              <li>
+                This section shows files downloaded/saved by the app.
+              </li>
+              <li>
+                Click <strong>Refresh</strong> to rescan the folder and update the list.
+              </li>
+            </ol>
+          </div>
+        </section>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div id="howToModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="howToModalTitle">
+      <div class="modal__backdrop" data-modal-close></div>
+      <div class="modal__panel" role="document">
+        <div class="modal__header">
+          <h2 id="howToModalTitle" class="modal__title">How to Use the GUI</h2>
+          <button class="modal__close" type="button" aria-label="Close" data-modal-close></button>
+        </div>
+
+        <p class="modal__subtitle">Use the sidebar to switch sections. Uploading works by chunking your file and sending those chunks as Kaspa transactions.</p>
+
+        <div class="modal__block">
+          <div class="modal__block-header">
+            <div class="modal__block-label">QUICK START</div>
+            <button id="howToCopyBtn" class="btn-secondary" type="button">Copy</button>
+          </div>
+          <pre class="modal__code"><code id="howToCopyText">1) Start: select a file, enter your private key + (optional) RPC URL<br>2) Estimate: click "Estimate cost" to see chunk count and expected fees<br>3) Send: enter recipient + amount, click "Send" and monitor progress<br>4) Receive: paste the manifest Transaction ID, pick an output name, download</code></pre>
+        </div>
+
+        <div class="modal__callout">
+          <div class="modal__callout-title">Instructions</div>
+          <ul class="modal__list">
+            <li>Start: drop a file or click to browse. Keep the window open during upload.</li>
+            <li>Estimate: verifies file size/chunk count and estimates network fees before you send.</li>
+            <li>Send: progress shows submitted chunks; the top status line shows queued/running/errors.</li>
+            <li>Receive: optional start block hash can speed up scanning on older txids.</li>
+            <li>Library: lists downloaded/saved files; use Refresh to rescan.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div id="fieldHelpModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="fieldHelpModalTitle">
+      <div class="modal__backdrop" data-fieldhelp-close></div>
+      <div class="modal__panel" role="document">
+        <div class="modal__header">
+          <h2 id="fieldHelpModalTitle" class="modal__title"></h2>
+          <button class="modal__close" type="button" aria-label="Close" data-fieldhelp-close></button>
+        </div>
+
+        <p id="fieldHelpModalSubtitle" class="modal__subtitle"></p>
+
+        <div class="modal__block">
+          <div class="modal__block-header">
+            <div class="modal__block-label">EXAMPLE</div>
+            <button id="fieldHelpCopyBtn" class="btn-secondary" type="button">Copy</button>
+          </div>
+          <pre class="modal__code"><code id="fieldHelpCopyText"></code></pre>
+        </div>
+
+        <div class="modal__callout">
+          <div class="modal__callout-title">Notes</div>
+          <ul id="fieldHelpList" class="modal__list"></ul>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js?v=8"></script>
+  </body>
+</html>

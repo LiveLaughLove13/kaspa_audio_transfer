@@ -1,0 +1,36 @@
+[package]
+name = "kaspa-audio-transfer-wasm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["console"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Kaspa dependencies
+kaspa-wallet-core = { path = "../rusty-kaspa/wallet/core" }
+kaspa-consensus-core = { path = "../rusty-kaspa/consensus/core" }
+kaspa-rpc-core = { path = "../rusty-kaspa/rpc/core" }
+kaspa-addresses = { path = "../rusty-kaspa/crypto/addresses" }
+kaspa-core = { path = "../rusty-kaspa/core" }
+kaspa-grpc-client = { path = "../rusty-kaspa/rpc/grpc/client" }
+
+# Async runtime
+tokio = { version = "1.33.0", features = ["full"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+[profile.release]
+lto = true
+opt-level = 3
+codegen-units = 1

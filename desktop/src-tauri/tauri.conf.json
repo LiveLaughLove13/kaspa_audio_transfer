@@ -1,0 +1,43 @@
+{
+  "build": {
+    "beforeBuildCommand": "",
+    "beforeDevCommand": "",
+    "devPath": "../ui",
+    "distDir": "../ui",
+    "withGlobalTauri": true
+  },
+  "package": {
+    "productName": "Kaspa Audio Transfer",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false
+    },
+    "windows": [
+      {
+        "title": "Kaspa Audio Transfer",
+        "width": 1200,
+        "height": 780,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null,
+      "dangerousRemoteDomainIpcAccess": [
+        {
+          "domain": "localhost",
+          "windows": ["main"],
+          "enableTauriAPI": true
+        }
+      ]
+    },
+    "bundle": {
+      "active": true,
+      "targets": ["msi"],
+      "identifier": "com.kaspa.audio.transfer",
+      "icon": ["icons/icon.ico"]
+    }
+  }
+}
