@@ -37,7 +37,7 @@ cargo build --release
 # Basic usage
 kaspa_audio_transfer send --from-private-key YOUR_PRIVATE_KEY --to-address kaspa:recipient_address --file path\to\your\audio.mp3
 
-cargo run -- send "E:\Eminem - No Love Explicit Version ft. Lil Wayne.mp3" --from-private-key 036aa7c6a91c24af963c4001e599db4fffb4395a2459a80986b9c223320a37cc --to-address kaspa:qq3tqr9f0z6t6zwcrjkk8krwwltazcl0s4gvelvakvqmj9essyq4kaksa3v0m --amount 0.2
+cargo run -- send "E:\Eminem - No Love Explicit Version ft. Lil Wayne.mp3" --from-private-key 1234567891234567891234567891234512345678912345678912345678912345 --to-address kaspa:qq3tqr9f0z6t6zwcrjkk8krwwltazcl0s4gvelvakvqmj9essyq4kaksa3v0m --amount 0.2
 
 # With custom RPC URL (default: grpc://127.0.0.1:16110)
 kaspa_audio_transfer send --rpc-url grpc://your.node:port --from-private-key YOUR_PRIVATE_KEY --to-address kaspa:recipient_address --file song.mp3
