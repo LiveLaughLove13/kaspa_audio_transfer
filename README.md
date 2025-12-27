@@ -18,11 +18,13 @@ A command-line tool to store and retrieve files on the Kaspa blockchain (works f
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/kaspa_audio_transfer
+git clone https://github.com/LiveLaughLove13/kaspa_audio_transfer
 cd kaspa_audio_transfer
 
 # Build in release mode (recommended)
-cargo build --release
+cargo build CLI
+cargo run --manifest-path desktop/src-tauri/Cargo.toml  For GUI
+cargo tauri build
 
 # The binary will be available at:
 # - Linux/macOS: ./target/release/kaspa_audio_transfer
