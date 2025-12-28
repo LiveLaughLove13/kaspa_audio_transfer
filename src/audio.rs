@@ -11,17 +11,11 @@ pub fn read_audio_file(file_path: &str) -> Result<Vec<u8>> {
     file.read_to_end(&mut buffer)
         .map_err(|e| AudioTransferError::Io(e))?;
     
-    // Basic validation that this is an audio file
-    if !is_audio_file(&buffer) {
-        return Err(AudioTransferError::InvalidInput(
-            "The provided file doesn't appear to be a valid audio file".to_string()
-        ));
-    }
-    
     Ok(buffer)
 }
 
 /// Validates if the provided data appears to be an audio file
+#[allow(dead_code)]
 fn is_audio_file(data: &[u8]) -> bool {
     // Check for common audio file signatures
     // MP3

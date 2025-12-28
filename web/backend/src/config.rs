@@ -54,15 +54,15 @@ impl Config {
             .unwrap_or_else(|| "kaspa_audio_transfer".to_string());
 
         // Max allowed request body size for uploads (estimate/send/send_async).
-        // - If MAX_UPLOAD_BYTES is unset: default is 1 GiB.
-        // - If MAX_UPLOAD_BYTES is set to 0: disable the limit (trusted/local only).
-        let default_max_upload_bytes = 1024usize * 1024 * 1024;
+        // - If MAX_UPLOAD_BYTES is unset or empty: disable the limit.
+        // - If MAX_UPLOAD_BYTES is set to 0: disable the limit.
+        // - If MAX_UPLOAD_BYTES is set to a positive integer: enforce that limit.
         let max_upload_bytes = match env::var("MAX_UPLOAD_BYTES") {
-            Err(_) => Some(default_max_upload_bytes),
+            Err(_) => None,
             Ok(s) => {
                 let t = s.trim();
                 if t.is_empty() {
-                    Some(default_max_upload_bytes)
+                    None
                 } else if let Ok(v) = t.parse::<u64>() {
                     if v == 0 {
                         None
@@ -70,7 +70,7 @@ impl Config {
                         Some(usize::try_from(v).unwrap_or(usize::MAX))
                     }
                 } else {
-                    Some(default_max_upload_bytes)
+                    None
                 }
             }
         };
