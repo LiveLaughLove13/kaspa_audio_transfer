@@ -7,7 +7,7 @@ edition = "2021"
 tauri-build = { version = "1.5", features = [] }
 
 [dependencies]
-tauri = { version = "1.6", features = [] }
+tauri = { version = "1.6", features = ["dialog-all", "fs-all", "path-all", "shell-open"] }
 serde = { version = "1.0", features = ["derive"] }
 base64 = "0.22"
 

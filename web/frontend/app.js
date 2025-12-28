@@ -996,6 +996,36 @@ document.addEventListener("DOMContentLoaded", () => {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  async function tauriSaveBytes(bytes, suggestedName) {
+    const t = window.__TAURI__;
+    const invoke = t && typeof t.invoke === "function" ? t.invoke.bind(t) : null;
+    if (!invoke) {
+      throw new Error("Tauri invoke is unavailable");
+    }
+
+    const fileDialog = t.dialog;
+    const fs = t.fs;
+    const path = t.path;
+    if (!fileDialog || !fs || !path) {
+      throw new Error("Tauri dialog/fs/path APIs are unavailable (check allowlist)");
+    }
+
+    const defaultDir = await path.downloadDir();
+    const target = await fileDialog.save({
+      defaultPath: `${defaultDir}${path.sep}${suggestedName}`,
+    });
+    if (!target) {
+      throw new Error("Save cancelled");
+    }
+
+    await fs.writeBinaryFile({
+      path: target,
+      contents: bytes,
+    });
+
+    return target;
+  }
+
   receiveBtn?.addEventListener("click", async () => {
     const txId = (receiveTxId?.value || "").trim();
     const rpc = (rpcUrl?.value || "").trim();
@@ -1016,28 +1046,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const invoke = getTauriInvoke();
       if (invoke || isDesktopTauri()) {
-        const startedAt = Date.now();
-        const params = new URLSearchParams();
-        params.set("tx_id", txId);
-        if (rpc) params.set("rpc_url", rpc);
-        if (startBlockHash) params.set("start_block_hash", startBlockHash);
-        if (outputName) params.set("output_name", outputName);
+        const payload = {
+          tx_id: txId,
+          rpc_url: rpc || null,
+          start_block_hash: startBlockHash || null,
+          output_name: outputName || null,
+        };
 
-        const url = `/api/receive?${params.toString()}`;
-        const a = document.createElement("a");
-        a.href = url;
-        if (outputName) a.setAttribute("download", outputName);
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
+        const response = await fetch("/api/receive", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
-        const info = outputName
-          ? `Download started. Saving as ${outputName}.`
-          : "Download started.";
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || `Request failed with status ${response.status}`);
+        }
+
+        const contentDisposition = response.headers.get("content-disposition") || "";
+        const m = /filename="([^"]+)"/.exec(contentDisposition);
+        const serverName = m ? m[1] : "";
+        const downloadName = outputName || serverName || "received.bin";
+
+        const blob = await response.blob();
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        const savedTo = await tauriSaveBytes(bytes, downloadName);
+
+        const info = `Saved ${formatBytes(bytes.length)} to ${savedTo}.`;
         if (receiveDownloadedInfo) receiveDownloadedInfo.textContent = info;
         setStatus(info);
-
-        waitForReceivedFile(txId, startedAt);
+        stopReceiveTimer();
         return;
       }
 
