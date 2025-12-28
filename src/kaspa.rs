@@ -10,12 +10,15 @@ use kaspa_consensus_core::sign;
 use kaspa_consensus_core::subnets::SUBNETWORK_ID_NATIVE;
 use kaspa_consensus_core::tx::{PopulatedTransaction, Transaction, TransactionId, TransactionInput, TransactionOutpoint, TransactionOutput, UtxoEntry};
 use kaspa_grpc_client::GrpcClient;
-use kaspa_rpc_core::model::{RpcHash, RpcTransactionId};
+use kaspa_rpc_core::model::{RpcDataVerbosityLevel, RpcHash, RpcTransactionId};
 use kaspa_rpc_core::notify::mode::NotificationMode;
 use kaspa_txscript::pay_to_address_script;
 use rand::RngCore;
+use reqwest::Url;
 use secp256k1::Keypair;
+use serde::Deserialize;
 use std::collections::HashSet;
+use std::io::{self, Write};
 use std::str::FromStr;
 use tokio::time::{sleep, Duration};
 
@@ -38,11 +41,29 @@ struct KatManifest {
     total_chunks: u32,
 }
 
+#[derive(Debug, Deserialize)]
+struct RestTxOutput {
+    script_public_key_address: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RestTxModel {
+    payload: Option<String>,
+    outputs: Option<Vec<RestTxOutput>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RestAddressTxModel {
+    payload: Option<String>,
+}
+
 pub struct KaspaClient {
     client: GrpcClient,
 }
 
 impl KaspaClient {
+    const MAX_RPC_SCAN_PAGES_FROM_PRUNING: u32 = 250;
+
     pub async fn new(rpc_url: Option<&str>) -> Result<Self> {
         let rpc_url = rpc_url.unwrap_or(DEFAULT_KASPA_RPC_URL);
         eprintln!("Connecting to Kaspa node at: {}", rpc_url);
@@ -91,6 +112,15 @@ impl KaspaClient {
         v as f64 / SOMPI_PER_KASPA as f64
     }
 
+    fn progress_line(line: &str) {
+        eprint!("\r{:<140}", line);
+        let _ = io::stderr().flush();
+    }
+
+    fn progress_end() {
+        eprintln!();
+    }
+
     async fn feerate_priority(&self) -> Result<f64> {
         let est = self
             .client
@@ -98,6 +128,231 @@ impl KaspaClient {
             .await
             .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
         Ok(est.priority_bucket.feerate)
+    }
+
+    fn should_use_rest_fallback(err: &AudioTransferError) -> bool {
+        match err {
+            AudioTransferError::KaspaRpc(msg) => {
+                let m = msg.to_lowercase();
+                m.contains("transaction not found in mempool or virtual chain scan")
+                    || m.contains("cannot find header")
+                    || m.contains("header not found")
+            }
+            _ => false,
+        }
+    }
+
+    async fn rest_get_tx(
+        &self,
+        tx_id: &str,
+        block_hash: Option<&str>,
+        inputs: bool,
+        outputs: bool,
+    ) -> Result<RestTxModel> {
+        let mut url = Url::parse("https://api.kaspa.org")
+            .map_err(|e| AudioTransferError::KaspaRpc(format!("REST url parse failed: {e}")))?;
+        {
+            let mut seg = url
+                .path_segments_mut()
+                .map_err(|_| AudioTransferError::KaspaRpc("REST url cannot be a base".to_string()))?;
+            seg.push("transactions");
+            seg.push(tx_id);
+        }
+        {
+            let mut q = url.query_pairs_mut();
+            q.append_pair("inputs", if inputs { "true" } else { "false" });
+            q.append_pair("outputs", if outputs { "true" } else { "false" });
+            if let Some(h) = block_hash {
+                q.append_pair("blockHash", h);
+            }
+        }
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .map_err(|e| AudioTransferError::KaspaRpc(format!("REST client build failed: {e}")))?;
+
+        let resp = client
+            .get(url.clone())
+            .send()
+            .await
+            .map_err(|e| AudioTransferError::KaspaRpc(format!("REST request failed: {e}")))?;
+        let status = resp.status();
+        if !status.is_success() {
+            let text = resp
+                .text()
+                .await
+                .unwrap_or_else(|_| "<no body>".to_string());
+            return Err(AudioTransferError::KaspaRpc(format!(
+                "REST GET {} failed: {}: {}",
+                url, status, text
+            )));
+        }
+        resp.json::<RestTxModel>()
+            .await
+            .map_err(|e| AudioTransferError::KaspaRpc(format!("REST json parse failed: {e}")))
+    }
+
+    async fn rest_get_address_txs(
+        &self,
+        address: &str,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<RestAddressTxModel>> {
+        let mut url = Url::parse("https://api.kaspa.org")
+            .map_err(|e| AudioTransferError::KaspaRpc(format!("REST url parse failed: {e}")))?;
+        {
+            let mut seg = url
+                .path_segments_mut()
+                .map_err(|_| AudioTransferError::KaspaRpc("REST url cannot be a base".to_string()))?;
+            seg.push("addresses");
+            seg.push(address);
+            seg.push("full-transactions");
+        }
+        {
+            let mut q = url.query_pairs_mut();
+            q.append_pair("limit", &limit.to_string());
+            q.append_pair("offset", &offset.to_string());
+            q.append_pair("fields", "transaction_id,payload");
+        }
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .map_err(|e| AudioTransferError::KaspaRpc(format!("REST client build failed: {e}")))?;
+
+        let resp = client
+            .get(url.clone())
+            .send()
+            .await
+            .map_err(|e| AudioTransferError::KaspaRpc(format!("REST request failed: {e}")))?;
+        let status = resp.status();
+        if !status.is_success() {
+            let text = resp
+                .text()
+                .await
+                .unwrap_or_else(|_| "<no body>".to_string());
+            return Err(AudioTransferError::KaspaRpc(format!(
+                "REST GET {} failed: {}: {}",
+                url, status, text
+            )));
+        }
+        resp.json::<Vec<RestAddressTxModel>>()
+            .await
+            .map_err(|e| AudioTransferError::KaspaRpc(format!("REST json parse failed: {e}")))
+    }
+
+    fn rest_payload_hex_to_bytes(payload_hex: Option<String>) -> Result<Vec<u8>> {
+        let Some(p) = payload_hex else {
+            return Err(AudioTransferError::KaspaRpc(
+                "REST transaction payload missing".to_string(),
+            ));
+        };
+        hex::decode(&p)
+            .map_err(|e| AudioTransferError::KaspaRpc(format!("REST payload hex decode failed: {e}")))
+    }
+
+    async fn receive_audio_via_rest(&self, tx_id: &str, start_block_hash: Option<&str>) -> Result<Vec<u8>> {
+        eprintln!("Info: falling back to api.kaspa.org for transaction/chunk retrieval");
+
+        let tx = self.rest_get_tx(tx_id, start_block_hash, false, true).await?;
+        let payload = Self::rest_payload_hex_to_bytes(tx.payload)?;
+
+        if !Self::is_kat_payload(&payload) {
+            return Ok(payload);
+        }
+
+        if payload.len() >= 5 && payload[4] == KAT_TYPE_CHUNK {
+            let Some((_file_id, _idx, _total, offset)) = Self::try_decode_chunk_header(&payload) else {
+                return Err(AudioTransferError::InvalidInput("Invalid chunk payload".to_string()));
+            };
+            if payload.len() < 33 {
+                return Err(AudioTransferError::InvalidInput("Invalid chunk payload".to_string()));
+            }
+            let data_len = u32::from_le_bytes(payload[29..33].try_into().unwrap()) as usize;
+            if offset + data_len > payload.len() {
+                return Err(AudioTransferError::InvalidInput("Invalid chunk payload".to_string()));
+            }
+            return Ok(payload[offset..offset + data_len].to_vec());
+        }
+
+        let manifest = Self::decode_manifest_payload(&payload)?;
+
+        let sender_addr = tx
+            .outputs
+            .as_ref()
+            .and_then(|o| o.last())
+            .and_then(|o| o.script_public_key_address.as_ref())
+            .cloned()
+            .ok_or_else(|| AudioTransferError::KaspaRpc("REST tx outputs missing sender address".to_string()))?;
+
+        let mut chunks: Vec<Option<Vec<u8>>> = vec![None; manifest.total_chunks as usize];
+        let mut found_chunks: usize = 0;
+
+        let limit: u32 = 500;
+        let mut page: u32 = 0;
+        while page < 200 {
+            let offset = page.saturating_mul(limit);
+            Self::progress_line(&format!(
+                "REST scanning {} | {}/{} chunks | page {}",
+                sender_addr,
+                found_chunks,
+                chunks.len(),
+                page
+            ));
+
+            let txs = self.rest_get_address_txs(&sender_addr, limit, offset).await?;
+            if txs.is_empty() {
+                break;
+            }
+            for t in txs.iter() {
+                let Some(payload_hex) = t.payload.as_ref() else { continue; };
+                let Ok(p) = hex::decode(payload_hex) else { continue; };
+                if let Some((file_id, idx, total, offset)) = Self::try_decode_chunk_header(&p) {
+                    if file_id == manifest.file_id && total == manifest.total_chunks {
+                        if p.len() < 33 {
+                            continue;
+                        }
+                        let data_len = u32::from_le_bytes(p[29..33].try_into().unwrap()) as usize;
+                        if offset + data_len > p.len() {
+                            continue;
+                        }
+                        if (idx as usize) < chunks.len() {
+                            if chunks[idx as usize].is_none() {
+                                found_chunks = found_chunks.saturating_add(1);
+                            }
+                            chunks[idx as usize] = Some(p[offset..offset + data_len].to_vec());
+                        }
+                    }
+                }
+            }
+
+            if chunks.iter().all(|c| c.is_some()) {
+                break;
+            }
+            if txs.len() < limit as usize {
+                break;
+            }
+            page += 1;
+        }
+
+        Self::progress_end();
+
+        if !chunks.iter().all(|c| c.is_some()) {
+            return Err(AudioTransferError::KaspaRpc(
+                "Unable to locate all chunks via api.kaspa.org".to_string(),
+            ));
+        }
+
+        let mut out = Vec::with_capacity(manifest.total_size as usize);
+        for i in 0..(manifest.total_chunks as usize) {
+            let Some(c) = chunks[i].as_ref() else {
+                return Err(AudioTransferError::KaspaRpc(format!("Missing chunk {i}")));
+            };
+            out.extend_from_slice(c);
+        }
+        out.truncate(manifest.total_size as usize);
+        Ok(out)
     }
 
     pub async fn estimate_audio_fees(&self, audio_data: &[u8], from_private_key_hex: &str, amount: f64) -> Result<()> {
@@ -255,7 +510,7 @@ impl KaspaClient {
 
         if assumed_input_amount > initial_entry_amount {
             println!(
-                "Warning: your largest available UTXO ({:.8} KAS) appears insufficient for amount+fees; estimate assumes {:.8} KAS input",
+                "Info: your largest available UTXO ({:.8} KAS) appears insufficient for amount+fees; estimate assumes {:.8} KAS input",
                 Self::sompi_to_kas(initial_entry_amount),
                 Self::sompi_to_kas(assumed_input_amount)
             );
@@ -347,6 +602,7 @@ impl KaspaClient {
             0,
             vec![],
         );
+
         let max_payload_chunk = Self::compute_max_payload_len_for_template(
             &mass_calc,
             chunk_template,
@@ -431,11 +687,7 @@ impl KaspaClient {
             )));
         }
         manifest_tx.set_mass(ctx.storage_mass);
-        manifest_tx = Self::finalize_and_sign_single_input(
-            manifest_tx,
-            kaspa_consensus_core::tx::UtxoEntry::new(initial_entry_amount, initial_entry_spk.clone(), UNACCEPTED_DAA_SCORE, false),
-            &keypair,
-        )?;
+        manifest_tx = Self::finalize_and_sign_single_input(manifest_tx, kaspa_consensus_core::tx::UtxoEntry::new(initial_entry_amount, initial_entry_spk.clone(), UNACCEPTED_DAA_SCORE, false), &keypair)?;
 
         let manifest_txid: RpcTransactionId = self
             .client
@@ -956,6 +1208,7 @@ impl KaspaClient {
         tx.inputs[0].sig_op_count = 1;
         let mut signable = kaspa_consensus_core::tx::SignableTransaction::new(tx);
         signable.entries[0] = Some(entry);
+
         let mut signed = sign::sign(signable, keypair.clone());
         signed.tx.finalize();
         Ok(signed.tx)
@@ -966,35 +1219,66 @@ impl KaspaClient {
             return Ok(entry.transaction.payload);
         }
 
-        let tx_id_str = tx_id.to_string();
+        let mut effective_start_block_hash = start_block_hash;
 
-        let dag = self
-            .client
-            .get_block_dag_info()
-            .await
-            .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
+        loop {
+            let dag = self
+                .client
+                .get_block_dag_info()
+                .await
+                .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
 
-        let mut start_hash: RpcHash = if let Some(h) = start_block_hash {
-            RpcHash::from_str(h)
-                .map_err(|e| AudioTransferError::KaspaRpc(format!("Invalid start_block_hash: {e}")))?
-        } else {
-            dag.pruning_point_hash
-        };
-        for _page in 0..2000u32 {
-            let response = {
+            let mut start_hash: RpcHash = if let Some(h) = effective_start_block_hash {
+                RpcHash::from_str(h)
+                    .map_err(|e| AudioTransferError::KaspaRpc(format!("Invalid start_block_hash: {e}")))?
+            } else {
+                dag.pruning_point_hash
+            };
+
+            let page_limit: u64 = 50;
+            let mut page: u32 = 0;
+            let mut used_user_start_hash = effective_start_block_hash.is_some();
+            'scan_tx: while page < 2000u32 {
+
+                if !used_user_start_hash && page >= Self::MAX_RPC_SCAN_PAGES_FROM_PRUNING {
+                    Self::progress_end();
+                    return Err(AudioTransferError::KaspaRpc(
+                        "Transaction not found in mempool or virtual chain scan (hit pruning-point scan limit; assuming node is pruned)"
+                            .to_string(),
+                    ));
+                }
+
+                Self::progress_line(&format!(
+                    "Scanning for tx {} | page {} | from {}{}",
+                    tx_id,
+                    page,
+                    start_hash,
+                    if used_user_start_hash { " (user start)" } else { "" }
+                ));
+
                 let mut attempt: u32 = 0;
                 let mut backoff_ms: u64 = 250;
-                loop {
+                let response = loop {
                     attempt += 1;
                     match self
                         .client
-                        .get_virtual_chain_from_block(start_hash, true, None)
+                        .get_virtual_chain_from_block_v2(start_hash, Some(RpcDataVerbosityLevel::Full), Some(page_limit))
                         .await
                     {
                         Ok(resp) => break resp,
                         Err(e) => {
                             let msg = e.to_string();
-
+                            if used_user_start_hash && Self::is_missing_header_error(&msg) {
+                                Self::progress_end();
+                                eprintln!(
+                                    "Info: start_block_hash header not found on this node; falling back to pruning point {}",
+                                    dag.pruning_point_hash
+                                );
+                                start_hash = dag.pruning_point_hash;
+                                used_user_start_hash = false;
+                                page = 0;
+                                continue 'scan_tx;
+                            }
                             let is_timeout = msg.to_lowercase().contains("timeout");
                             if !is_timeout || attempt >= 10 {
                                 return Err(AudioTransferError::KaspaRpc(msg));
@@ -1003,55 +1287,68 @@ impl KaspaClient {
                             backoff_ms = (backoff_ms * 2).min(10_000);
                         }
                     }
-                }
-            };
+                };
 
-            for bucket in response.accepted_transaction_ids.iter() {
-                let is_target = bucket
-                    .accepted_transaction_ids
-                    .iter()
-                    .any(|id| id.to_string() == tx_id_str);
-                if !is_target {
-                    continue;
-                }
-
-                let block = self
-                    .client
-                    .get_block(bucket.accepting_block_hash, true)
-                    .await
-                    .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
-
-                for tx in block.transactions.iter() {
-                    let is_target = tx
-                        .verbose_data
-                        .as_ref()
-                        .is_some_and(|v| v.transaction_id.to_string() == tx_id_str);
-                    if !is_target {
-                        continue;
+                for block in response.chain_block_accepted_transactions.iter() {
+                    for tx in block.accepted_transactions.iter() {
+                        let Some(p) = tx.payload.as_ref() else { continue; };
+                        let is_target = tx
+                            .verbose_data
+                            .as_ref()
+                            .and_then(|v| v.transaction_id)
+                            .is_some_and(|id| id == tx_id);
+                        if !is_target {
+                            continue;
+                        }
+                        Self::progress_end();
+                        return Ok(p.clone());
                     }
-                    return Ok(tx.payload.clone());
                 }
+
+                let added = response.added_chain_block_hashes.as_ref();
+                let Some(last) = added.last().copied() else {
+                    break;
+                };
+
+                if last == start_hash {
+                    break;
+                }
+                start_hash = last;
+                page += 1;
             }
 
-            let added = &response.added_chain_block_hashes;
-            let Some(last) = added.last().copied() else { break; };
-            if last == start_hash {
-                break;
+            if effective_start_block_hash.is_some() {
+                Self::progress_end();
+                eprintln!(
+                    "Info: transaction not found when scanning from start_block_hash; retrying from pruning point {}",
+                    dag.pruning_point_hash
+                );
+                effective_start_block_hash = None;
+                continue;
             }
-            start_hash = last;
+
+            Self::progress_end();
+            return Err(AudioTransferError::KaspaRpc(
+                "Transaction not found in mempool or virtual chain scan".to_string(),
+            ));
         }
-
-        Err(AudioTransferError::KaspaRpc(
-            "Transaction not found in mempool or virtual chain scan".to_string(),
-        ))
     }
 
     pub async fn receive_audio(&self, tx_id: &str, start_block_hash: Option<&str>) -> Result<Vec<u8>> {
+        let tx_id_str = tx_id;
         println!("Fetching transaction: {}", tx_id);
-        let tx_id = TransactionId::from_str(tx_id)
+        let tx_id = TransactionId::from_str(tx_id_str)
             .map_err(|e| AudioTransferError::KaspaRpc(format!("Invalid transaction ID: {e}")))?;
 
-        let payload = self.find_transaction_payload(tx_id, start_block_hash).await?;
+        let payload = match self.find_transaction_payload(tx_id, start_block_hash).await {
+            Ok(p) => p,
+            Err(e) => {
+                if Self::should_use_rest_fallback(&e) {
+                    return self.receive_audio_via_rest(tx_id_str, start_block_hash).await;
+                }
+                return Err(e);
+            }
+        };
 
         if !Self::is_kat_payload(&payload) {
             return Ok(payload);
@@ -1066,15 +1363,9 @@ impl KaspaClient {
         }
 
         let manifest = Self::decode_manifest_payload(&payload)?;
-        println!(
-            "Manifest: file_id={}, total_size={}, chunk_size={}, total_chunks={}",
-            hex::encode(manifest.file_id),
-            manifest.total_size,
-            manifest.chunk_size,
-            manifest.total_chunks
-        );
 
         let mut chunks: Vec<Option<Vec<u8>>> = vec![None; manifest.total_chunks as usize];
+        let mut found_chunks: usize = 0;
 
         // mempool
         if let Ok(entries) = self
@@ -1089,6 +1380,9 @@ impl KaspaClient {
                     if file_id == manifest.file_id && total == manifest.total_chunks {
                         let data_len = u32::from_le_bytes(p[29..33].try_into().unwrap()) as usize;
                         if (idx as usize) < chunks.len() {
+                            if chunks[idx as usize].is_none() {
+                                found_chunks = found_chunks.saturating_add(1);
+                            }
                             chunks[idx as usize] = Some(p[offset..offset + data_len].to_vec());
                         }
                     }
@@ -1097,35 +1391,62 @@ impl KaspaClient {
         }
 
         // paged accepted scan
-        let dag = self
-            .client
-            .get_block_dag_info()
-            .await
-            .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
+        let mut effective_start_block_hash = start_block_hash;
 
-        let mut start_hash: RpcHash = if let Some(h) = start_block_hash {
-            RpcHash::from_str(h)
-                .map_err(|e| AudioTransferError::KaspaRpc(format!("Invalid start_block_hash: {e}")))?
-        } else {
-            dag.pruning_point_hash
-        };
+        loop {
+            let dag = self
+                .client
+                .get_block_dag_info()
+                .await
+                .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
 
-        for _page in 0..2000u32 {
-            let response = {
+            let mut start_hash: RpcHash = if let Some(h) = effective_start_block_hash {
+                RpcHash::from_str(h)
+                    .map_err(|e| AudioTransferError::KaspaRpc(format!("Invalid start_block_hash: {e}")))?
+            } else {
+                dag.pruning_point_hash
+            };
+            let page_limit: u64 = 50;
+
+            let mut page: u32 = 0;
+            let mut used_user_start_hash = effective_start_block_hash.is_some();
+            'scan_chunks: while page < 2000u32 {
+                if !used_user_start_hash && page >= Self::MAX_RPC_SCAN_PAGES_FROM_PRUNING {
+                    Self::progress_end();
+                    break;
+                }
+                Self::progress_line(&format!(
+                    "Scanning chunks | {}/{} | page {} | from {}{}",
+                    found_chunks,
+                    chunks.len(),
+                    page,
+                    start_hash,
+                    if used_user_start_hash { " (user start)" } else { "" }
+                ));
                 let mut attempt: u32 = 0;
                 let mut backoff_ms: u64 = 250;
-                loop {
+                let response = loop {
                     attempt += 1;
                     match self
                         .client
-                        .get_virtual_chain_from_block(start_hash, true, None)
+                        .get_virtual_chain_from_block_v2(start_hash, Some(RpcDataVerbosityLevel::Full), Some(page_limit))
                         .await
                     {
                         Ok(resp) => break resp,
                         Err(e) => {
                             let msg = e.to_string();
+                            if used_user_start_hash && Self::is_missing_header_error(&msg) {
+                                Self::progress_end();
+                                eprintln!(
+                                    "Info: start_block_hash header not found on this node; falling back to pruning point {}",
+                                    dag.pruning_point_hash
+                                );
+                                start_hash = dag.pruning_point_hash;
+                                used_user_start_hash = false;
+                                page = 0;
+                                continue 'scan_chunks;
+                            }
                             let is_timeout = msg.to_lowercase().contains("timeout");
-
                             if !is_timeout || attempt >= 10 {
                                 return Err(AudioTransferError::KaspaRpc(msg));
                             }
@@ -1133,43 +1454,58 @@ impl KaspaClient {
                             backoff_ms = (backoff_ms * 2).min(10_000);
                         }
                     }
-                }
-            };
+                };
 
-            for bucket in response.accepted_transaction_ids.iter() {
-                if chunks.iter().all(|c| c.is_some()) {
-                    break;
-                }
-
-                let block = self
-                    .client
-                    .get_block(bucket.accepting_block_hash, true)
-                    .await
-                    .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
-
-                for tx in block.transactions.iter() {
-                    let p = &tx.payload;
-                    if let Some((file_id, idx, total, offset)) = Self::try_decode_chunk_header(p) {
-                        if file_id == manifest.file_id && total == manifest.total_chunks {
-                            let data_len = u32::from_le_bytes(p[29..33].try_into().unwrap()) as usize;
-                            if offset + data_len <= p.len() && (idx as usize) < chunks.len() {
-                                chunks[idx as usize] = Some(p[offset..offset + data_len].to_vec());
+                for block in response.chain_block_accepted_transactions.iter() {
+                    for tx in block.accepted_transactions.iter() {
+                        let Some(p) = tx.payload.as_ref() else { continue; };
+                        if let Some((file_id, idx, total, offset)) = Self::try_decode_chunk_header(p) {
+                            if file_id == manifest.file_id && total == manifest.total_chunks {
+                                let data_len = u32::from_le_bytes(p[29..33].try_into().unwrap()) as usize;
+                                if (idx as usize) < chunks.len() {
+                                    if chunks[idx as usize].is_none() {
+                                        found_chunks = found_chunks.saturating_add(1);
+                                    }
+                                    chunks[idx as usize] = Some(p[offset..offset + data_len].to_vec());
+                                }
                             }
                         }
                     }
                 }
+
+                if chunks.iter().all(|c| c.is_some()) {
+                    Self::progress_end();
+                    break;
+                }
+
+                let added = response.added_chain_block_hashes.as_ref();
+                let Some(last) = added.last().copied() else {
+                    break;
+                };
+
+                if last == start_hash {
+                    break;
+                }
+                start_hash = last;
+                page += 1;
             }
 
-            if chunks.iter().all(|c| c.is_some()) {
-                break;
+            if effective_start_block_hash.is_some() {
+                Self::progress_end();
+                eprintln!(
+                    "Info: chunks not found when scanning from start_block_hash; retrying from pruning point {}",
+                    dag.pruning_point_hash
+                );
+                effective_start_block_hash = None;
+                continue;
             }
 
-            let added = &response.added_chain_block_hashes;
-            let Some(last) = added.last().copied() else { break; };
-            if last == start_hash {
-                break;
-            }
-            start_hash = last;
+            Self::progress_end();
+            break;
+        }
+
+        if chunks.iter().any(|c| c.is_none()) {
+            return self.receive_audio_via_rest(tx_id_str, start_block_hash).await;
         }
 
         let mut out = Vec::with_capacity(manifest.total_size as usize);
@@ -1187,44 +1523,66 @@ impl KaspaClient {
         &self,
         tx_id: &str,
         start_block_hash: Option<&str>,
-        _min_confirmation_count: u64,
+        min_confirmation_count: u64,
     ) -> Result<Option<String>> {
-        let tx_id = TransactionId::from_str(tx_id)
+        let tx_id_str = tx_id;
+        let tx_id = TransactionId::from_str(tx_id_str)
             .map_err(|e| AudioTransferError::KaspaRpc(format!("Invalid transaction ID: {e}")))?;
 
         if self.client.get_mempool_entry(tx_id, true, false).await.is_ok() {
             return Ok(None);
         }
 
-        let tx_id_str = tx_id.to_string();
+        let mut effective_start_block_hash = start_block_hash;
 
-        let dag = self
-            .client
-            .get_block_dag_info()
-            .await
-            .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
+        loop {
+            let dag = self
+                .client
+                .get_block_dag_info()
+                .await
+                .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
 
-        let mut start_hash: RpcHash = if let Some(h) = start_block_hash {
-            RpcHash::from_str(h)
-                .map_err(|e| AudioTransferError::KaspaRpc(format!("Invalid start_block_hash: {e}")))?
-        } else {
-            dag.pruning_point_hash
-        };
+            let mut start_hash: RpcHash = if let Some(h) = effective_start_block_hash {
+                RpcHash::from_str(h)
+                    .map_err(|e| AudioTransferError::KaspaRpc(format!("Invalid start_block_hash: {e}")))?
+            } else {
+                dag.pruning_point_hash
+            };
 
-        for _page in 0..2000u32 {
-            let response = {
+            let mut page: u32 = 0;
+            let mut used_user_start_hash = effective_start_block_hash.is_some();
+            'scan_accept: while page < 2000u32 {
+                Self::progress_line(&format!(
+                    "Scanning acceptance for tx {} | page {} | from {}{}",
+                    tx_id,
+                    page,
+                    start_hash,
+                    if used_user_start_hash { " (user start)" } else { "" }
+                ));
+
                 let mut attempt: u32 = 0;
                 let mut backoff_ms: u64 = 250;
-                loop {
+                let response = loop {
                     attempt += 1;
                     match self
                         .client
-                        .get_virtual_chain_from_block(start_hash, true, None)
+                        .get_virtual_chain_from_block(start_hash, true, Some(min_confirmation_count))
                         .await
                     {
                         Ok(resp) => break resp,
                         Err(e) => {
                             let msg = e.to_string();
+                            if used_user_start_hash && Self::is_missing_header_error(&msg) {
+                                Self::progress_end();
+                                eprintln!(
+                                    "Info: start_block_hash header not found on this node; falling back to pruning point {}",
+                                    dag.pruning_point_hash
+                                );
+                                start_hash = dag.pruning_point_hash;
+                                used_user_start_hash = false;
+                                page = 0;
+                                continue 'scan_accept;
+                            }
                             let is_timeout = msg.to_lowercase().contains("timeout");
                             if !is_timeout || attempt >= 10 {
                                 return Err(AudioTransferError::KaspaRpc(msg));
@@ -1233,28 +1591,40 @@ impl KaspaClient {
                             backoff_ms = (backoff_ms * 2).min(10_000);
                         }
                     }
-                }
-            };
+                };
 
-            for bucket in response.accepted_transaction_ids.iter() {
-                let found = bucket
-                    .accepted_transaction_ids
-                    .iter()
-                    .any(|id| id.to_string() == tx_id_str);
-                if found {
-                    return Ok(Some(bucket.accepting_block_hash.to_string()));
+                for bucket in response.accepted_transaction_ids.iter() {
+                    if bucket.accepted_transaction_ids.iter().any(|id| *id == tx_id) {
+                        Self::progress_end();
+                        return Ok(Some(bucket.accepting_block_hash.to_string()));
+                    }
                 }
+
+                let added = &response.added_chain_block_hashes;
+                let Some(last) = added.last().copied() else {
+                    break;
+                };
+
+                if last == start_hash {
+                    break;
+                }
+                start_hash = last;
+                page += 1;
             }
 
-            let added = &response.added_chain_block_hashes;
-            let Some(last) = added.last().copied() else { break; };
-            if last == start_hash {
-                break;
+            if effective_start_block_hash.is_some() {
+                Self::progress_end();
+                eprintln!(
+                    "Info: accepting block not found when scanning from start_block_hash; retrying from pruning point {}",
+                    dag.pruning_point_hash
+                );
+                effective_start_block_hash = None;
+                continue;
             }
-            start_hash = last;
+
+            Self::progress_end();
+            return Ok(None);
         }
-
-        Ok(None)
     }
 
     pub async fn get_network_info(&self) -> Result<String> {
@@ -1264,13 +1634,26 @@ impl KaspaClient {
             .await
             .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
 
+        let dag = self
+            .client
+            .get_block_dag_info()
+            .await
+            .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
+
         Ok(format!(
-            "Server version: {}\nMempool size: {}\nSynced: {}\nP2P ID: {}\nUTXO Indexed: {}",
+            "Network: {}\nServer version: {}\nMempool size: {}\nSynced: {}\nP2P ID: {}\nUTXO Indexed: {}\nPruning point: {}",
+            dag.network,
             info.server_version,
             info.mempool_size,
             info.is_synced,
             info.p2p_id,
-            info.is_utxo_indexed
+            info.is_utxo_indexed,
+            dag.pruning_point_hash
         ))
+    }
+
+    fn is_missing_header_error(msg: &str) -> bool {
+        let m = msg.to_lowercase();
+        m.contains("cannot find header") || m.contains("header not found")
     }
 }

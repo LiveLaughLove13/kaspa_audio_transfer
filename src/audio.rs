@@ -28,9 +28,14 @@ fn is_audio_file(data: &[u8]) -> bool {
     if data.len() > 2 && &data[0..3] == b"ID3" {
         return true;
     }
+
+    // MP3 (frame sync)
+    if data.len() > 1 && data[0] == 0xFF && (data[1] & 0xE0) == 0xE0 {
+        return true;
+    }
     
     // WAV
-    if data.len() > 12 && &data[0..4] == b"RIFF" && &data[8..12] == b"WAVE" {
+    if data.len() >= 12 && &data[0..4] == b"RIFF" && &data[8..12] == b"WAVE" {
         return true;
     }
     
@@ -43,10 +48,8 @@ fn is_audio_file(data: &[u8]) -> bool {
     if data.len() > 4 && &data[0..4] == b"fLaC" {
         return true;
     }
-    
-    // If none of the above, it might still be an audio file with a different format
-    // or a corrupted file, but we'll be more permissive here
-    true
+
+    false
 }
 
 /// Converts binary data to a hex string for embedding in Kaspa transactions
@@ -89,7 +92,7 @@ mod tests {
         // Create a test WAV file
         let mut file = NamedTempFile::new().unwrap();
         file.write_all(b"RIFF____WAVE").unwrap();
-        let path = file.path().to_str().unwrap();
+        let _path = file.path().to_str().unwrap();
         
         // Should pass validation
         assert!(is_audio_file(b"RIFF____WAVE"));
