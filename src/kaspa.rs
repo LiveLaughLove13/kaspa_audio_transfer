@@ -62,7 +62,7 @@ pub struct KaspaClient {
 }
 
 impl KaspaClient {
-    const MAX_RPC_SCAN_PAGES_FROM_PRUNING: u32 = 250;
+    const MAX_RPC_SCAN_PAGES_FROM_PRUNING: u32 = 25;
 
     pub async fn new(rpc_url: Option<&str>) -> Result<Self> {
         let rpc_url = rpc_url.unwrap_or(DEFAULT_KASPA_RPC_URL);
