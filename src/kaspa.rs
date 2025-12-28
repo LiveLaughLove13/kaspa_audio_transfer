@@ -130,6 +130,39 @@ impl KaspaClient {
         Ok(est.priority_bucket.feerate)
     }
 
+    async fn resolve_feerate(&self, feerate: Option<f64>, fee_multiplier: Option<f64>) -> Result<f64> {
+        let est = self
+            .client
+            .get_fee_estimate()
+            .await
+            .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
+        let min_feerate = est
+            .low_buckets
+            .first()
+            .map(|b| b.feerate)
+            .unwrap_or(0.0);
+        let priority = est.priority_bucket.feerate;
+
+        let mut effective = if let Some(v) = feerate {
+            v
+        } else if let Some(m) = fee_multiplier {
+            priority * m
+        } else {
+            priority
+        };
+
+        if !effective.is_finite() || effective <= 0.0 {
+            return Err(AudioTransferError::InvalidInput(
+                "feerate must be a finite number > 0 (sompi/gram)".to_string(),
+            ));
+        }
+        if min_feerate.is_finite() && min_feerate > 0.0 {
+            effective = effective.max(min_feerate);
+        }
+
+        Ok(effective)
+    }
+
     fn should_use_rest_fallback(err: &AudioTransferError) -> bool {
         match err {
             AudioTransferError::KaspaRpc(msg) => {
@@ -540,6 +573,8 @@ impl KaspaClient {
         amount: f64,
         resume_from: Option<&str>,
         resume_output_index: u32,
+        feerate: Option<f64>,
+        fee_multiplier: Option<f64>,
     ) -> Result<String> {
         let send_value = (amount * SOMPI_PER_KASPA as f64) as u64;
         if send_value == 0 && resume_from.is_none() {
@@ -629,7 +664,7 @@ impl KaspaClient {
             total_chunks,
         };
 
-        let feerate = self.feerate_priority().await?;
+        let feerate = self.resolve_feerate(feerate, fee_multiplier).await?;
         let (manifest_fee, manifest_change) = Self::estimate_manifest_fee_and_change(
             &mass_calc,
             feerate,

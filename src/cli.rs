@@ -29,6 +29,14 @@ pub enum Commands {
         /// Which output index of --resume-from to spend (default: 1 = change output)
         #[arg(long, default_value_t = 1)]
         resume_output_index: u32,
+
+        /// Optional custom fee rate override (in sompi/gram). If set, this value is used instead of node fee estimates.
+        #[arg(long)]
+        feerate: Option<f64>,
+
+        /// Optional multiplier applied to the node's priority feerate (e.g. 1.2). Ignored if --feerate is set.
+        #[arg(long)]
+        fee_multiplier: Option<f64>,
         
         /// Recipient's Kaspa address
         #[arg(long)]

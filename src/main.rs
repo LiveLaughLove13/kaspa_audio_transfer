@@ -31,6 +31,8 @@ async fn run() -> Result<()> {
             rpc_url, 
             resume_from,
             resume_output_index,
+            feerate,
+            fee_multiplier,
             to_address, 
             amount,
             print_start_block_hash,
@@ -45,6 +47,8 @@ async fn run() -> Result<()> {
                 rpc_url,
                 resume_from.as_deref(),
                 resume_output_index,
+                feerate,
+                fee_multiplier,
                 &to_address,
                 amount,
                 print_start_block_hash,
@@ -104,6 +108,8 @@ async fn send_audio(
     rpc_url: Option<&str>,
     resume_from: Option<&str>,
     resume_output_index: u32,
+    feerate: Option<f64>,
+    fee_multiplier: Option<f64>,
     to_address: &str, 
     amount: f64,
     print_start_block_hash: bool,
@@ -121,7 +127,16 @@ async fn send_audio(
     
     println!("\nSending audio data to {}...", to_address);
     let tx_id = kaspa
-        .send_audio_signed(&audio_data, from_private_key, to_address, amount, resume_from, resume_output_index)
+        .send_audio_signed(
+            &audio_data,
+            from_private_key,
+            to_address,
+            amount,
+            resume_from,
+            resume_output_index,
+            feerate,
+            fee_multiplier,
+        )
         .await?;
     
     println!("\n✅ File sent successfully!");
