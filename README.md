@@ -85,8 +85,8 @@ Blank explanation of flow
 
 if you want to send a file you do
 .\kaspa_audio_transfer.exe send "full path here" --from-private-key <a Priv here> --to-address <any kaspa address here> --amount 1 
-It will give you the TX, which you then use to get block hash on the mainnet explorer [text](https://explorer.kaspa.org/).
-then you do 
+It will give you the TX, which you then use to get block hash on the [mainnet explorer](https://explorer.kaspa.org/).
+then you do
 
 .\kaspa_audio_transfer.exe receive <tx it gives at bottom> --output <file.type> --start-block-hash <first block hashof tx> 
 
@@ -94,7 +94,7 @@ if testing on testnet
 
 # if you want to send a file on testnet you do
 .\kaspa_audio_transfer.exe send "full path here" --rpc-url grpc://127.0.0.1:16210 --from-private-key <a Priv here> --to-address <any kaspa address here> --amount 1 
-It will give you the TX, which you then use to get block hash on the testnet explorer [text](https://explorer-tn10.kaspa.org/).
+It will give you the TX, which you then use to get block hash on the [testnet explorer](https://explorer-tn10.kaspa.org/).
 then you do 
 
 .\kaspa_audio_transfer.exe receive <TX_ID> --output <file> --rpc-url grpc://127.0.0.1:16210 --start-block-hash <first block hash of tx>
