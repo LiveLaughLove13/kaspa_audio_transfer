@@ -16,7 +16,13 @@ A command-line tool to store and retrieve files on the Kaspa blockchain (works f
 
 ### Setup Local Node
 
+[Node](https://github.com/kaspanet/rusty-kaspa/releases) 
+Install latest asset for your OS for example, 'Windows, Dec 2025, v1.0.1 - rusty-kaspa-v1.0.1-win64.zip'
+Extract zip to a new folder named 'kaspad' on the desktop
+
 ```bash
+# Navigate to the folder containing kaspad
+cd Desktop\kaspad
 # Mainnet
 # Standard setup
 kaspad --utxoindex
