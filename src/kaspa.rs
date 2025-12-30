@@ -17,6 +17,7 @@ use rand::RngCore;
 use reqwest::Url;
 use secp256k1::Keypair;
 use serde::Deserialize;
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::io::{self, Write};
 use std::str::FromStr;
@@ -96,7 +97,25 @@ impl KaspaClient {
     }
 
     fn parse_private_key_hex(hex_str: &str) -> Result<[u8; 32]> {
-        let bytes = hex::decode(hex_str)
+        let hex_str = if let Some(name) = hex_str.strip_prefix("env:") {
+            let v = std::env::var(name).map_err(|e| {
+                AudioTransferError::InvalidInput(format!(
+                    "Failed to read private key from environment variable '{name}': {e}"
+                ))
+            })?;
+            Cow::Owned(v)
+        } else if let Some(path) = hex_str.strip_prefix("file:") {
+            let v = std::fs::read_to_string(path).map_err(|e| {
+                AudioTransferError::InvalidInput(format!(
+                    "Failed to read private key from file '{path}': {e}"
+                ))
+            })?;
+            Cow::Owned(v)
+        } else {
+            Cow::Borrowed(hex_str)
+        };
+
+        let bytes = hex::decode(hex_str.trim())
             .map_err(|e| AudioTransferError::InvalidInput(format!("Invalid private key hex: {e}")))?;
         if bytes.len() != 32 {
             return Err(AudioTransferError::InvalidInput(
@@ -319,7 +338,8 @@ impl KaspaClient {
             .cloned()
             .ok_or_else(|| AudioTransferError::KaspaRpc("REST tx outputs missing sender address".to_string()))?;
 
-        let mut chunks: Vec<Option<Vec<u8>>> = vec![None; manifest.total_chunks as usize];
+        let mut out = vec![0u8; manifest.total_size as usize];
+        let mut found: Vec<bool> = vec![false; manifest.total_chunks as usize];
         let mut found_chunks: usize = 0;
 
         let limit: u32 = 500;
@@ -330,7 +350,7 @@ impl KaspaClient {
                 "REST scanning {} | {}/{} chunks | page {}",
                 sender_addr,
                 found_chunks,
-                chunks.len(),
+                found.len(),
                 page
             ));
 
@@ -350,17 +370,19 @@ impl KaspaClient {
                         if offset + data_len > p.len() {
                             continue;
                         }
-                        if (idx as usize) < chunks.len() {
-                            if chunks[idx as usize].is_none() {
-                                found_chunks = found_chunks.saturating_add(1);
-                            }
-                            chunks[idx as usize] = Some(p[offset..offset + data_len].to_vec());
-                        }
+                        let _ = Self::apply_chunk_to_reassembly(
+                            &manifest,
+                            &mut out,
+                            &mut found,
+                            &mut found_chunks,
+                            idx,
+                            &p[offset..offset + data_len],
+                        );
                     }
                 }
             }
 
-            if chunks.iter().all(|c| c.is_some()) {
+            if found_chunks == found.len() {
                 break;
             }
             if txs.len() < limit as usize {
@@ -371,30 +393,17 @@ impl KaspaClient {
 
         Self::progress_end();
 
-        if !chunks.iter().all(|c| c.is_some()) {
+        if found_chunks != found.len() {
             return Err(AudioTransferError::KaspaRpc(
                 "Unable to locate all chunks via api.kaspa.org".to_string(),
             ));
         }
 
-        let mut out = Vec::with_capacity(manifest.total_size as usize);
-        for i in 0..(manifest.total_chunks as usize) {
-            let Some(c) = chunks[i].as_ref() else {
-                return Err(AudioTransferError::KaspaRpc(format!("Missing chunk {i}")));
-            };
-            out.extend_from_slice(c);
-        }
-        out.truncate(manifest.total_size as usize);
         Ok(out)
     }
 
     pub async fn estimate_audio_fees(&self, audio_data: &[u8], from_private_key_hex: &str, amount: f64) -> Result<()> {
         let send_value = (amount * SOMPI_PER_KASPA as f64) as u64;
-        if send_value == 0 {
-            return Err(AudioTransferError::InvalidInput(
-                "amount must be > 0 (in KAS)".to_string(),
-            ));
-        }
 
         let dag = self
             .client
@@ -577,11 +586,6 @@ impl KaspaClient {
         fee_multiplier: Option<f64>,
     ) -> Result<String> {
         let send_value = (amount * SOMPI_PER_KASPA as f64) as u64;
-        if send_value == 0 && resume_from.is_none() {
-            return Err(AudioTransferError::InvalidInput(
-                "amount must be > 0 (in KAS)".to_string(),
-            ));
-        }
 
         println!(
             "Preparing to send {} KAS to {} with {} bytes of payload",
@@ -1046,6 +1050,35 @@ impl KaspaClient {
         Some((file_id, idx, total, 33))
     }
 
+    fn apply_chunk_to_reassembly(
+        manifest: &KatManifest,
+        out: &mut [u8],
+        found: &mut [bool],
+        found_count: &mut usize,
+        idx: u32,
+        data: &[u8],
+    ) -> Result<()> {
+        let idx_usize = idx as usize;
+        if idx_usize >= found.len() {
+            return Ok(());
+        }
+        if found[idx_usize] {
+            return Ok(());
+        }
+
+        let chunk_size = manifest.chunk_size as usize;
+        let start = idx_usize.saturating_mul(chunk_size);
+        let end = start.saturating_add(data.len());
+        if start >= out.len() || end > out.len() {
+            return Err(AudioTransferError::InvalidInput("Invalid chunk bounds".to_string()));
+        }
+
+        out[start..end].copy_from_slice(data);
+        found[idx_usize] = true;
+        *found_count = found_count.saturating_add(1);
+        Ok(())
+    }
+
     fn estimate_tx_fee_sompi(
         mass_calc: &MassCalculator,
         tx: &Transaction,
@@ -1249,6 +1282,86 @@ impl KaspaClient {
         Ok(signed.tx)
     }
 
+    async fn try_find_payload_in_block(&self, tx_id: TransactionId, block_hash: RpcHash) -> Result<Option<Vec<u8>>> {
+        let block = self
+            .client
+            .get_block(block_hash, true)
+            .await
+            .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
+
+        if let Some(vd) = block.verbose_data.as_ref() {
+            if vd.transaction_ids.len() == block.transactions.len() {
+                for (i, id) in vd.transaction_ids.iter().enumerate() {
+                    if *id == tx_id {
+                        return Ok(Some(block.transactions[i].payload.clone()));
+                    }
+                }
+            }
+        }
+
+        for tx in block.transactions.iter() {
+            let is_target = tx
+                .verbose_data
+                .as_ref()
+                .is_some_and(|v| v.transaction_id == tx_id);
+            if !is_target {
+                continue;
+            }
+            return Ok(Some(tx.payload.clone()));
+        }
+
+        Ok(None)
+    }
+
+    async fn get_selected_parent_hash(&self, block_hash: RpcHash) -> Result<Option<RpcHash>> {
+        let block = self
+            .client
+            .get_block(block_hash, false)
+            .await
+            .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
+
+        Ok(block.header.direct_parents().first().copied())
+    }
+
+    async fn apply_chunks_from_block(
+        &self,
+        block_hash: RpcHash,
+        manifest: &KatManifest,
+        out: &mut [u8],
+        found: &mut [bool],
+        found_chunks: &mut usize,
+    ) -> Result<()> {
+        let block = self
+            .client
+            .get_block(block_hash, true)
+            .await
+            .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
+
+        for tx in block.transactions.iter() {
+            let p = &tx.payload;
+            if let Some((file_id, idx, total, offset)) = Self::try_decode_chunk_header(p) {
+                if file_id == manifest.file_id && total == manifest.total_chunks {
+                    let data_len = u32::from_le_bytes(p[29..33].try_into().unwrap()) as usize;
+                    if offset + data_len <= p.len() {
+                        let _ = Self::apply_chunk_to_reassembly(
+                            manifest,
+                            out,
+                            found,
+                            found_chunks,
+                            idx,
+                            &p[offset..offset + data_len],
+                        );
+                    }
+                }
+            }
+            if *found_chunks == found.len() {
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
     async fn find_transaction_payload(&self, tx_id: TransactionId, start_block_hash: Option<&str>) -> Result<Vec<u8>> {
         if let Ok(entry) = self.client.get_mempool_entry(tx_id, true, false).await {
             return Ok(entry.transaction.payload);
@@ -1273,6 +1386,18 @@ impl KaspaClient {
             let page_limit: u64 = 50;
             let mut page: u32 = 0;
             let mut used_user_start_hash = effective_start_block_hash.is_some();
+
+            if used_user_start_hash {
+                let user_start_hash = start_hash;
+
+                if let Some(p) = self.try_find_payload_in_block(tx_id, user_start_hash).await? {
+                    return Ok(p);
+                }
+
+                if let Some(parent) = self.get_selected_parent_hash(user_start_hash).await? {
+                    start_hash = parent;
+                }
+            }
             'scan_tx: while page < 2000u32 {
 
                 if !used_user_start_hash && page >= Self::MAX_RPC_SCAN_PAGES_FROM_PRUNING {
@@ -1297,7 +1422,7 @@ impl KaspaClient {
                     attempt += 1;
                     match self
                         .client
-                        .get_virtual_chain_from_block_v2(start_hash, Some(RpcDataVerbosityLevel::Full), Some(page_limit))
+                        .get_virtual_chain_from_block_v2(start_hash, Some(RpcDataVerbosityLevel::High), Some(page_limit))
                         .await
                     {
                         Ok(resp) => break resp,
@@ -1394,12 +1519,16 @@ impl KaspaClient {
                 return Err(AudioTransferError::InvalidInput("Invalid chunk payload".to_string()));
             };
             let data_len = u32::from_le_bytes(payload[29..33].try_into().unwrap()) as usize;
+            if offset + data_len > payload.len() {
+                return Err(AudioTransferError::InvalidInput("Invalid chunk payload".to_string()));
+            }
             return Ok(payload[offset..offset + data_len].to_vec());
         }
 
         let manifest = Self::decode_manifest_payload(&payload)?;
 
-        let mut chunks: Vec<Option<Vec<u8>>> = vec![None; manifest.total_chunks as usize];
+        let mut out = vec![0u8; manifest.total_size as usize];
+        let mut found: Vec<bool> = vec![false; manifest.total_chunks as usize];
         let mut found_chunks: usize = 0;
 
         // mempool
@@ -1414,13 +1543,20 @@ impl KaspaClient {
                 if let Some((file_id, idx, total, offset)) = Self::try_decode_chunk_header(&p) {
                     if file_id == manifest.file_id && total == manifest.total_chunks {
                         let data_len = u32::from_le_bytes(p[29..33].try_into().unwrap()) as usize;
-                        if (idx as usize) < chunks.len() {
-                            if chunks[idx as usize].is_none() {
-                                found_chunks = found_chunks.saturating_add(1);
-                            }
-                            chunks[idx as usize] = Some(p[offset..offset + data_len].to_vec());
+                        if offset + data_len <= p.len() {
+                            let _ = Self::apply_chunk_to_reassembly(
+                                &manifest,
+                                &mut out,
+                                &mut found,
+                                &mut found_chunks,
+                                idx,
+                                &p[offset..offset + data_len],
+                            );
                         }
                     }
+                }
+                if found_chunks == found.len() {
+                    break;
                 }
             }
         }
@@ -1445,6 +1581,21 @@ impl KaspaClient {
 
             let mut page: u32 = 0;
             let mut used_user_start_hash = effective_start_block_hash.is_some();
+
+            if used_user_start_hash {
+                let user_start_hash = start_hash;
+
+                let _ = self
+                    .apply_chunks_from_block(user_start_hash, &manifest, &mut out, &mut found, &mut found_chunks)
+                    .await?;
+                if found_chunks == found.len() {
+                    return Ok(out);
+                }
+
+                if let Some(parent) = self.get_selected_parent_hash(user_start_hash).await? {
+                    start_hash = parent;
+                }
+            }
             'scan_chunks: while page < 2000u32 {
                 if !used_user_start_hash && page >= Self::MAX_RPC_SCAN_PAGES_FROM_PRUNING {
                     Self::progress_end();
@@ -1453,7 +1604,7 @@ impl KaspaClient {
                 Self::progress_line(&format!(
                     "Scanning chunks | {}/{} | page {} | from {}{}",
                     found_chunks,
-                    chunks.len(),
+                    found.len(),
                     page,
                     start_hash,
                     if used_user_start_hash { " (user start)" } else { "" }
@@ -1464,7 +1615,7 @@ impl KaspaClient {
                     attempt += 1;
                     match self
                         .client
-                        .get_virtual_chain_from_block_v2(start_hash, Some(RpcDataVerbosityLevel::Full), Some(page_limit))
+                        .get_virtual_chain_from_block_v2(start_hash, Some(RpcDataVerbosityLevel::High), Some(page_limit))
                         .await
                     {
                         Ok(resp) => break resp,
@@ -1497,20 +1648,24 @@ impl KaspaClient {
                         if let Some((file_id, idx, total, offset)) = Self::try_decode_chunk_header(p) {
                             if file_id == manifest.file_id && total == manifest.total_chunks {
                                 let data_len = u32::from_le_bytes(p[29..33].try_into().unwrap()) as usize;
-                                if (idx as usize) < chunks.len() {
-                                    if chunks[idx as usize].is_none() {
-                                        found_chunks = found_chunks.saturating_add(1);
-                                    }
-                                    chunks[idx as usize] = Some(p[offset..offset + data_len].to_vec());
+                                if offset + data_len <= p.len() {
+                                    let _ = Self::apply_chunk_to_reassembly(
+                                        &manifest,
+                                        &mut out,
+                                        &mut found,
+                                        &mut found_chunks,
+                                        idx,
+                                        &p[offset..offset + data_len],
+                                    );
                                 }
                             }
                         }
                     }
                 }
 
-                if chunks.iter().all(|c| c.is_some()) {
+                if found_chunks == found.len() {
                     Self::progress_end();
-                    break;
+                    return Ok(out);
                 }
 
                 let added = response.added_chain_block_hashes.as_ref();
@@ -1525,7 +1680,7 @@ impl KaspaClient {
                 page += 1;
             }
 
-            if effective_start_block_hash.is_some() {
+            if effective_start_block_hash.is_some() && found_chunks != found.len() {
                 Self::progress_end();
                 eprintln!(
                     "Info: chunks not found when scanning from start_block_hash; retrying from pruning point {}",
@@ -1539,18 +1694,10 @@ impl KaspaClient {
             break;
         }
 
-        if chunks.iter().any(|c| c.is_none()) {
+        if found_chunks != found.len() {
             return self.receive_audio_via_rest(tx_id_str, start_block_hash).await;
         }
 
-        let mut out = Vec::with_capacity(manifest.total_size as usize);
-        for i in 0..(manifest.total_chunks as usize) {
-            let Some(c) = chunks[i].as_ref() else {
-                return Err(AudioTransferError::KaspaRpc(format!("Missing chunk {i}")));
-            };
-            out.extend_from_slice(c);
-        }
-        out.truncate(manifest.total_size as usize);
         Ok(out)
     }
 
