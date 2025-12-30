@@ -13,6 +13,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::fs::{self, File};
 use tokio::io::AsyncWriteExt;
@@ -40,6 +41,22 @@ pub struct TxAcceptingBlockHashResponse {
 
 #[derive(Clone, Default)]
 struct SendLockStore {
+    inner: Arc<Mutex<HashMap<u64, Arc<Mutex<()>>>>>,
+}
+
+#[derive(Clone, Default)]
+struct TxAcceptingBlockHashCache {
+    inner: Arc<Mutex<HashMap<u64, TxAcceptingBlockHashCacheEntry>>>,
+}
+
+#[derive(Clone)]
+struct TxAcceptingBlockHashCacheEntry {
+    accepting_block_hash: Option<String>,
+    stored_at: Instant,
+}
+
+#[derive(Clone, Default)]
+struct TxAcceptingBlockHashLockStore {
     inner: Arc<Mutex<HashMap<u64, Arc<Mutex<()>>>>>,
 }
 
@@ -369,6 +386,19 @@ impl SendLockStore {
     }
 }
 
+impl TxAcceptingBlockHashLockStore {
+    async fn lock_for_fingerprint(&self, fingerprint: u64) -> Arc<Mutex<()>> {
+        let mut map = self.inner.lock().await;
+        if let Some(lock) = map.get(&fingerprint) {
+            return lock.clone();
+        }
+
+        let lock = Arc::new(Mutex::new(()));
+        map.insert(fingerprint, lock.clone());
+        lock
+    }
+}
+
 fn is_kaspa_rejected_or_mempool_error(msg: &str) -> bool {
     let m = msg.to_ascii_lowercase();
     m.contains("rejected transaction")
@@ -397,6 +427,8 @@ pub struct AppState {
     pub send_jobs: SendJobStore,
     send_locks: SendLockStore,
     send_queue: SendQueue,
+    tx_accepting_block_hash_cache: TxAcceptingBlockHashCache,
+    tx_accepting_block_hash_locks: TxAcceptingBlockHashLockStore,
 }
 
 impl AppState {
@@ -407,6 +439,8 @@ impl AppState {
             send_jobs: SendJobStore::new(),
             send_locks: SendLockStore::default(),
             send_queue: SendQueue::new(),
+            tx_accepting_block_hash_cache: TxAcceptingBlockHashCache::default(),
+            tx_accepting_block_hash_locks: TxAcceptingBlockHashLockStore::default(),
         }
     }
 }
@@ -823,11 +857,9 @@ pub async fn send_handler(
                 .filter(|s| !s.trim().is_empty())
                 .ok_or_else(|| (StatusCode::BAD_REQUEST, "missing to_address".to_string()))?;
 
-            let amount_kas = amount_kas.ok_or_else(|| {
-                (StatusCode::BAD_REQUEST, "missing amount".to_string())
-            })?;
-            if amount_kas <= 0.0 {
-                return Err((StatusCode::BAD_REQUEST, "amount must be > 0".to_string()));
+            let amount_kas = amount_kas.unwrap_or(0.0);
+            if !amount_kas.is_finite() || amount_kas < 0.0 {
+                return Err((StatusCode::BAD_REQUEST, "invalid amount".to_string()));
             }
 
             let SendResult { tx_id } = run_send(
@@ -1005,11 +1037,9 @@ pub async fn send_async_handler(
                 .filter(|s| !s.trim().is_empty())
                 .ok_or_else(|| (StatusCode::BAD_REQUEST, "missing to_address".to_string()))?;
 
-            let amount_kas = amount_kas.ok_or_else(|| {
-                (StatusCode::BAD_REQUEST, "missing amount".to_string())
-            })?;
-            if amount_kas <= 0.0 {
-                return Err((StatusCode::BAD_REQUEST, "amount must be > 0".to_string()));
+            let amount_kas = amount_kas.unwrap_or(0.0);
+            if !amount_kas.is_finite() || amount_kas < 0.0 {
+                return Err((StatusCode::BAD_REQUEST, "invalid amount".to_string()));
             }
 
             let job = SendJob {
@@ -1119,8 +1149,60 @@ pub async fn tx_accepting_block_hash_handler(
         .map(str::trim)
         .filter(|s| !s.is_empty());
 
-    let min_confirmations = q.min_confirmations.unwrap_or(1);
-    let wait_secs = q.wait_secs.unwrap_or(0);
+    // Match CLI send --print-start-block-hash defaults.
+    let min_confirmations = q.min_confirmations.unwrap_or(0);
+    let wait_secs = q.wait_secs.unwrap_or(15);
+
+    let mut hasher = DefaultHasher::new();
+    tx_id.hash(&mut hasher);
+    rpc_url.unwrap_or("").hash(&mut hasher);
+    start_block_hash.unwrap_or("").hash(&mut hasher);
+    min_confirmations.hash(&mut hasher);
+    wait_secs.hash(&mut hasher);
+    let fingerprint = hasher.finish();
+
+    let ttl_some = Duration::from_secs(10 * 60);
+    let ttl_none = Duration::from_secs(2);
+
+    {
+        let cache = state.tx_accepting_block_hash_cache.inner.lock().await;
+        if let Some(entry) = cache.get(&fingerprint) {
+            let ttl = if entry.accepting_block_hash.is_some() {
+                ttl_some
+            } else {
+                ttl_none
+            };
+            if entry.stored_at.elapsed() <= ttl {
+                return Ok(Json(TxAcceptingBlockHashResponse {
+                    tx_id: tx_id.to_string(),
+                    accepting_block_hash: entry.accepting_block_hash.clone(),
+                }));
+            }
+        }
+    }
+
+    let lock = state
+        .tx_accepting_block_hash_locks
+        .lock_for_fingerprint(fingerprint)
+        .await;
+    let _guard = lock.lock().await;
+
+    {
+        let cache = state.tx_accepting_block_hash_cache.inner.lock().await;
+        if let Some(entry) = cache.get(&fingerprint) {
+            let ttl = if entry.accepting_block_hash.is_some() {
+                ttl_some
+            } else {
+                ttl_none
+            };
+            if entry.stored_at.elapsed() <= ttl {
+                return Ok(Json(TxAcceptingBlockHashResponse {
+                    tx_id: tx_id.to_string(),
+                    accepting_block_hash: entry.accepting_block_hash.clone(),
+                }));
+            }
+        }
+    }
 
     let accepting_block_hash = run_tx_accepting_block_hash(
         tx_id,
@@ -1132,6 +1214,17 @@ pub async fn tx_accepting_block_hash_handler(
     )
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    {
+        let mut cache = state.tx_accepting_block_hash_cache.inner.lock().await;
+        cache.insert(
+            fingerprint,
+            TxAcceptingBlockHashCacheEntry {
+                accepting_block_hash: accepting_block_hash.clone(),
+                stored_at: Instant::now(),
+            },
+        );
+    }
 
     Ok(Json(TxAcceptingBlockHashResponse {
         tx_id: tx_id.to_string(),

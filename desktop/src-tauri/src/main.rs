@@ -25,6 +25,13 @@ struct KaspaSendProgressEvent {
     total_chunks: Option<u32>,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WalletSendFileResult {
+    tx_id: String,
+    start_block_hash: Option<String>,
+}
+
 #[tauri::command]
 fn wallet_status() -> Result<WalletStatus, String> {
     Ok(WalletStatus {
@@ -145,6 +152,58 @@ fn parse_submitted_chunks_from_line(line: &str) -> Option<(u32, Option<u32>)> {
     Some((done, total))
 }
 
+fn extract_first_64hex(line: &str) -> Option<String> {
+    let t = line.trim();
+    if t.len() == 64 && t.bytes().all(|b| b.is_ascii_hexdigit()) {
+        Some(t.to_string())
+    } else {
+        None
+    }
+}
+
+fn resolve_start_block_hash(
+    exe: &Path,
+    tx_id: &str,
+    rpc_url: Option<&str>,
+    min_confirmations: u64,
+    wait_secs: u64,
+) -> Result<Option<String>, String> {
+    let mut cmd = Command::new(exe);
+    cmd.arg("tx-accepting-block-hash")
+        .arg(tx_id)
+        .arg("--min-confirmations")
+        .arg(min_confirmations.to_string())
+        .arg("--wait-secs")
+        .arg(wait_secs.to_string())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    if let Some(u) = rpc_url.map(str::trim).filter(|s| !s.is_empty()) {
+        cmd.arg("--rpc-url").arg(u);
+    }
+
+    let out = cmd
+        .output()
+        .map_err(|e| format!("failed to run tx-accepting-block-hash: {e}"))?;
+
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(format!(
+            "tx-accepting-block-hash failed with status {}: {}",
+            out.status,
+            stderr.trim()
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    for line in stdout.lines() {
+        if let Some(h) = extract_first_64hex(line) {
+            return Ok(Some(h));
+        }
+    }
+    Ok(None)
+}
+
 #[tauri::command(rename_all = "camelCase")]
 async fn wallet_core_send_file_b64(
     window: Window,
@@ -158,6 +217,36 @@ async fn wallet_core_send_file_b64(
     file_name: Option<String>,
     from_private_key: Option<String>,
 ) -> Result<String, String> {
+    let result = wallet_core_send_file_b64_with_start_block_hash(
+        window,
+        account_id,
+        file_b64,
+        to_address,
+        amount_kas,
+        rpc_url,
+        resume_from,
+        resume_output_index,
+        file_name,
+        from_private_key,
+    )
+    .await?;
+
+    Ok(result.tx_id)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn wallet_core_send_file_b64_with_start_block_hash(
+    window: Window,
+    account_id: Option<String>,
+    file_b64: String,
+    to_address: String,
+    amount_kas: f64,
+    rpc_url: Option<String>,
+    resume_from: Option<String>,
+    resume_output_index: Option<u32>,
+    file_name: Option<String>,
+    from_private_key: Option<String>,
+) -> Result<WalletSendFileResult, String> {
     // The UI prefers this command when using wallet-core for key custody.
     // This desktop build currently does not integrate kaspa wallet-core signing.
     // Trigger the UI fallback path unless a private key is explicitly provided.
@@ -325,7 +414,21 @@ async fn wallet_core_send_file_b64(
             );
         }
 
-        txid.ok_or_else(|| "send succeeded but no Transaction ID found in output".to_string())
+        let tx_id = txid.ok_or_else(|| "send succeeded but no Transaction ID found in output".to_string())?;
+
+        // Match CLI send --print-start-block-hash defaults.
+        let start_block_hash = resolve_start_block_hash(
+            &exe,
+            &tx_id,
+            rpc_url.as_deref(),
+            0,
+            15,
+        )?;
+
+        Ok(WalletSendFileResult {
+            tx_id,
+            start_block_hash,
+        })
     })
     .await
     .map_err(|e| format!("send task join error: {e}"))?
@@ -344,7 +447,37 @@ async fn wallet_send_file_b64(
     file_name: Option<String>,
     from_private_key: Option<String>,
 ) -> Result<String, String> {
-    wallet_core_send_file_b64(
+    let result = wallet_send_file_b64_with_start_block_hash(
+        window,
+        account_id,
+        file_b64,
+        to_address,
+        amount_kas,
+        rpc_url,
+        resume_from,
+        resume_output_index,
+        file_name,
+        from_private_key,
+    )
+    .await
+
+    .map(|r| r.tx_id)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn wallet_send_file_b64_with_start_block_hash(
+    window: Window,
+    account_id: Option<String>,
+    file_b64: String,
+    to_address: String,
+    amount_kas: f64,
+    rpc_url: Option<String>,
+    resume_from: Option<String>,
+    resume_output_index: Option<u32>,
+    file_name: Option<String>,
+    from_private_key: Option<String>,
+) -> Result<WalletSendFileResult, String> {
+    wallet_core_send_file_b64_with_start_block_hash(
         window,
         account_id,
         file_b64,
@@ -516,7 +649,9 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             wallet_status,
             wallet_core_send_file_b64,
+            wallet_core_send_file_b64_with_start_block_hash,
             wallet_send_file_b64,
+            wallet_send_file_b64_with_start_block_hash,
             open_file,
             reveal_in_folder
         ])

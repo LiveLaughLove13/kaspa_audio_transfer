@@ -19,7 +19,7 @@ use secp256k1::Keypair;
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::collections::HashSet;
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::str::FromStr;
 use tokio::time::{sleep, Duration};
 
@@ -127,17 +127,37 @@ impl KaspaClient {
         Ok(out)
     }
 
-    fn sompi_to_kas(v: u64) -> f64 {
+    fn kas_from_sompi(v: u64) -> f64 {
         v as f64 / SOMPI_PER_KASPA as f64
     }
 
+    fn sompi_to_kas(v: u64) -> f64 {
+        Self::kas_from_sompi(v)
+    }
+
     fn progress_line(line: &str) {
-        eprint!("\r{:<140}", line);
-        let _ = io::stderr().flush();
+        let inline = std::env::var("KAT_PROGRESS_STYLE")
+            .ok()
+            .map(|v| v.trim().eq_ignore_ascii_case("inline"))
+            .unwrap_or(false);
+
+        if inline && io::stderr().is_terminal() {
+            eprint!("\r{:<140}", line);
+            let _ = io::stderr().flush();
+        } else {
+            eprintln!("{line}");
+        }
     }
 
     fn progress_end() {
-        eprintln!();
+        let inline = std::env::var("KAT_PROGRESS_STYLE")
+            .ok()
+            .map(|v| v.trim().eq_ignore_ascii_case("inline"))
+            .unwrap_or(false);
+
+        if inline && io::stderr().is_terminal() {
+            eprintln!();
+        }
     }
 
     async fn feerate_priority(&self) -> Result<f64> {

@@ -160,7 +160,7 @@
           if (await ping()) {
             pillTextEl.textContent = "Opening…";
             statusEl.textContent = "Service is up. Loading the app…";
-            window.location.href = baseUrl;
+            window.location.href = `${baseUrl}/?ts=${Date.now()}`;
             return;
           }
           await new Promise((r) => setTimeout(r, 500));

@@ -53,6 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const resultFileName = document.getElementById("resultFileName");
   const resultFileSize = document.getElementById("resultFileSize");
   const resultChunkCount = document.getElementById("resultChunkCount");
+  let resultUploadTime = document.getElementById("resultUploadTime");
   const resultTotalFee = document.getElementById("resultTotalFee");
   const resultEffectiveCost = document.getElementById("resultEffectiveCost");
   const resultExpectedAmount = document.getElementById("resultExpectedAmount");
@@ -71,8 +72,185 @@ document.addEventListener("DOMContentLoaded", () => {
   let receiveTimerStart = null;
   let receiveTimerInterval = null;
 
+  const ESTIMATED_SEND_RATE_KEY = "kat_est_send_chunks_per_sec";
+  const DEFAULT_SEND_CHUNKS_PER_SEC = 1.5;
+
+  function getEstimatedSendChunksPerSec() {
+    try {
+      const raw = localStorage.getItem(ESTIMATED_SEND_RATE_KEY);
+      const v = raw ? Number(raw) : NaN;
+      if (isFinite(v) && v > 0) return v;
+    } catch {
+      // ignore
+    }
+    return DEFAULT_SEND_CHUNKS_PER_SEC;
+  }
+
+  function setEstimatedSendChunksPerSec(v) {
+    if (!isFinite(v) || v <= 0) return;
+    const clamped = Math.max(0.1, Math.min(50, v));
+    try {
+      localStorage.setItem(ESTIMATED_SEND_RATE_KEY, String(clamped));
+    } catch {
+      // ignore
+    }
+  }
+
+  function formatEtaFromSeconds(sec) {
+    if (!isFinite(sec) || sec < 0) return "";
+    const total = Math.ceil(sec);
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+  }
+
+  function ensureResultUploadTimeEl() {
+    if (resultUploadTime instanceof HTMLElement) return resultUploadTime;
+
+    const existing = document.getElementById("resultUploadTime");
+    if (existing instanceof HTMLElement) {
+      resultUploadTime = existing;
+      return existing;
+    }
+
+    const anchor = resultChunkCount instanceof HTMLElement ? resultChunkCount : null;
+    const anchorRow = anchor ? anchor.closest(".result-row") : null;
+    const list = anchorRow ? anchorRow.parentElement : null;
+    if (!anchorRow || !list) return null;
+
+    const row = document.createElement("div");
+    row.className = "result-row";
+
+    const dt = document.createElement("dt");
+    dt.textContent = "Estimated upload time";
+
+    const dd = document.createElement("dd");
+    dd.id = "resultUploadTime";
+
+    row.appendChild(dt);
+    row.appendChild(dd);
+
+    if (anchorRow.nextSibling) {
+      list.insertBefore(row, anchorRow.nextSibling);
+    } else {
+      list.appendChild(row);
+    }
+
+    resultUploadTime = dd;
+    return dd;
+  }
+
+  function renderEstimateUploadTime(chunkCount) {
+    const el = ensureResultUploadTimeEl();
+    if (!el) return;
+    const n = typeof chunkCount === "number" ? chunkCount : Number(chunkCount);
+    if (!isFinite(n) || n <= 0) {
+      el.textContent = "";
+      return;
+    }
+    const rate = getEstimatedSendChunksPerSec();
+    const sec = n / rate;
+    el.textContent = `${formatEtaFromSeconds(sec)} (at ~${rate.toFixed(2)} chunks/sec)`;
+  }
+
   estimateForm?.addEventListener("submit", (e) => {
     e.preventDefault();
+  });
+
+  let lastAutofillAcceptedHashTxId = "";
+  let lastAutofillAcceptedHash = "";
+  let userEditedAcceptedHash = false;
+  const acceptedHashInFlight = new Map();
+
+  async function fetchAcceptedBlockHash(txId) {
+    if (!/^[0-9a-fA-F]{64}$/.test(txId)) return null;
+    const rpc = (rpcUrl?.value || "").trim();
+    const key = `${txId}|${rpc}`;
+    const existing = acceptedHashInFlight.get(key);
+    if (existing) return await existing;
+
+    const p = (async () => {
+      const qs = new URLSearchParams({ tx_id: txId, min_confirmations: "0", wait_secs: "15" });
+      if (rpc) qs.set("rpc_url", rpc);
+      const r = await fetch(`/api/tx_accepting_block_hash?${qs.toString()}`, { cache: "no-store" });
+      if (!r.ok) return null;
+      const data = await r.json();
+      const h = data && typeof data.accepting_block_hash === "string" ? data.accepting_block_hash.trim() : "";
+      if (!/^[0-9a-fA-F]{64}$/.test(h)) return null;
+      return h;
+    })();
+
+    acceptedHashInFlight.set(key, p);
+    try {
+      return await p;
+    } finally {
+      acceptedHashInFlight.delete(key);
+    }
+  }
+
+  async function maybeAutofillAcceptedBlockHash() {
+    if (!receiveTxId || !receiveStartBlockHash) return;
+
+    const txId = (receiveTxId.value || "").trim();
+    if (!/^[0-9a-fA-F]{64}$/.test(txId)) return;
+
+    if (userEditedAcceptedHash) return;
+    if (txId === lastAutofillAcceptedHashTxId && /^[0-9a-fA-F]{64}$/.test(lastAutofillAcceptedHash)) return;
+
+    const oldPlaceholder = receiveStartBlockHash.placeholder;
+    if (!(receiveStartBlockHash.value || "").trim()) {
+      receiveStartBlockHash.placeholder = "Resolving accepted block hash...";
+    }
+    try {
+      const h = await fetchAcceptedBlockHash(txId);
+      if (!h) return;
+
+      if (userEditedAcceptedHash) return;
+      const current = (receiveStartBlockHash.value || "").trim();
+      if (current && current !== lastAutofillAcceptedHash) return;
+
+      receiveStartBlockHash.value = h;
+      lastAutofillAcceptedHashTxId = txId;
+      lastAutofillAcceptedHash = h;
+    } catch {
+      // ignore
+    } finally {
+      receiveStartBlockHash.placeholder = oldPlaceholder;
+    }
+  }
+
+  receiveStartBlockHash?.addEventListener("input", () => {
+    const v = (receiveStartBlockHash.value || "").trim();
+    if (!v) {
+      userEditedAcceptedHash = false;
+      return;
+    }
+    if (v !== lastAutofillAcceptedHash) {
+      userEditedAcceptedHash = true;
+    }
+  });
+
+  receiveTxId?.addEventListener("input", () => {
+    const current = (receiveStartBlockHash?.value || "").trim();
+    if (!current || current === lastAutofillAcceptedHash) {
+      userEditedAcceptedHash = false;
+    }
+    lastAutofillAcceptedHashTxId = "";
+    void maybeAutofillAcceptedBlockHash();
+  });
+
+  receiveTxId?.addEventListener("change", () => {
+    lastAutofillAcceptedHashTxId = "";
+    void maybeAutofillAcceptedBlockHash();
+  });
+
+  rpcUrl?.addEventListener("input", () => {
+    if (userEditedAcceptedHash) return;
+    lastAutofillAcceptedHashTxId = "";
+    void maybeAutofillAcceptedBlockHash();
   });
 
   function initCollapsibleCards() {
@@ -96,7 +274,6 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
           body.style.maxHeight = body.scrollHeight + "px";
         }
-
         if (key) localStorage.setItem(key, collapsed ? "1" : "0");
       };
 
@@ -311,8 +488,8 @@ document.addEventListener("DOMContentLoaded", () => {
         ],
       },
       receiveStartBlockHash: {
-        title: "Start block hash (optional)",
-        subtitle: "Optional optimization to start scanning from a known block hash to find chunks faster.",
+        title: "Accepted block hash (optional)",
+        subtitle: "Optional optimization: provide the tx's accepted (accepting) block hash to speed up scanning.",
         example: "eb92329b04ffe0bd70357b365e50309c9daee8cb8751d26933b62da5283840fc",
         notes: [
           "Best value is the transaction's accepting block hash (a 64-hex block hash).",
@@ -362,7 +539,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const receiveTxExplorerBtn = document.getElementById("receiveTxExplorerBtn");
-    receiveTxExplorerBtn?.addEventListener("click", () => {
+    receiveTxExplorerBtn?.addEventListener("click", async () => {
       const txid = (receiveTxId?.value || "").trim();
       if (!txid) {
         setStatus("Paste a Transaction ID first, then click Explorer.");
@@ -374,7 +551,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      if (fieldHelpModalTitle) fieldHelpModalTitle.textContent = "Transaction ID (Explorer)";
+      if (fieldHelpModalTitle) fieldHelpModalTitle.textContent = "Accepted block hash";
 
       const explorerUrl = `https://explorer.kaspa.org/transactions/${encodeURIComponent(txid)}`;
       if (fieldHelpModalSubtitle) {
@@ -389,7 +566,9 @@ document.addEventListener("DOMContentLoaded", () => {
         fieldHelpModalSubtitle.appendChild(a);
       }
 
-      if (fieldHelpCopyText) fieldHelpCopyText.textContent = txid;
+      const labelEl = fieldHelpModal.querySelector(".modal__block-label");
+      if (labelEl) labelEl.textContent = "ACCEPTED BLOCK HASH";
+      if (fieldHelpCopyText) fieldHelpCopyText.textContent = "Resolving...";
 
       if (fieldHelpList) {
         fieldHelpList.innerHTML = "";
@@ -397,13 +576,30 @@ document.addEventListener("DOMContentLoaded", () => {
           "Click the explorer link above.",
           "In the transaction page, locate the 'Block hashes' section.",
           "Copy the accepting block hash (64 hex characters).",
-          "Paste the hash into 'Start block hash (optional)' and then download.",
+          "Paste the hash into 'Accepted block hash (optional)' and then download.",
         ];
         for (const line of notes) {
           const li = document.createElement("li");
           li.textContent = line;
           fieldHelpList.appendChild(li);
         }
+      }
+
+      try {
+        const h = await fetchAcceptedBlockHash(txid);
+        if (h) {
+          if (fieldHelpCopyText) fieldHelpCopyText.textContent = h;
+          const current = (receiveStartBlockHash?.value || "").trim();
+          if (receiveStartBlockHash && (!current || current === lastAutofillAcceptedHash) && !userEditedAcceptedHash) {
+            receiveStartBlockHash.value = h;
+            lastAutofillAcceptedHashTxId = txid;
+            lastAutofillAcceptedHash = h;
+          }
+        } else {
+          if (fieldHelpCopyText) fieldHelpCopyText.textContent = "(not found yet)";
+        }
+      } catch {
+        if (fieldHelpCopyText) fieldHelpCopyText.textContent = "(error)";
       }
 
       openFieldHelpModal();
@@ -424,7 +620,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!raw.trim()) return;
       try {
         await navigator.clipboard.writeText(raw);
-        setStatus("Copied example to clipboard.");
+        setStatus("Copied to clipboard.");
       } catch {
         setStatus("Copy failed. Please copy manually.");
       }
@@ -641,6 +837,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (resultFileName) resultFileName.textContent = "";
     if (resultFileSize) resultFileSize.textContent = "";
     if (resultChunkCount) resultChunkCount.textContent = "";
+    const uploadEl = ensureResultUploadTimeEl();
+    if (uploadEl) uploadEl.textContent = "";
     if (resultTotalFee) resultTotalFee.textContent = "";
     if (resultEffectiveCost) resultEffectiveCost.textContent = "";
     if (resultExpectedAmount) resultExpectedAmount.textContent = "";
@@ -689,6 +887,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (receiveOutputName) receiveOutputName.value = "";
       if (receiveDownloadedInfo) receiveDownloadedInfo.textContent = "";
       if (receiveElapsed) receiveElapsed.textContent = "00:00";
+
+      lastAutofillAcceptedHashTxId = "";
+      lastAutofillAcceptedHash = "";
+      userEditedAcceptedHash = false;
 
       setStatus("");
 
@@ -810,6 +1012,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (typeof data.chunk_count !== "undefined") {
       resultChunkCount.textContent = String(data.chunk_count);
+      if (typeof data.chunk_count === "number") {
+        renderEstimateUploadTime(data.chunk_count);
+      } else {
+        renderEstimateUploadTime(Number(data.chunk_count));
+      }
     }
 
     if (typeof data.total_network_fee_kas !== "undefined") {
@@ -941,6 +1148,12 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             if (receiveTxId && typeof st.txid === "string") {
               receiveTxId.value = st.txid;
+              const current = (receiveStartBlockHash?.value || "").trim();
+              if (!current || current === lastAutofillAcceptedHash) {
+                userEditedAcceptedHash = false;
+              }
+              lastAutofillAcceptedHashTxId = "";
+              void maybeAutofillAcceptedBlockHash();
             }
 
             if (sendProgressBar && typeof st.total_chunks === "number") {
@@ -948,6 +1161,17 @@ document.addEventListener("DOMContentLoaded", () => {
               sendProgressBar.value = st.total_chunks;
             }
             if (typeof st.total_chunks === "number") setSendProgress(st.total_chunks, st.total_chunks);
+
+            if (sendTimerStart && typeof st.total_chunks === "number" && st.total_chunks > 0) {
+              const elapsedSec = (Date.now() - sendTimerStart) / 1000;
+              if (isFinite(elapsedSec) && elapsedSec > 0) {
+                const observed = st.total_chunks / elapsedSec;
+                const prior = getEstimatedSendChunksPerSec();
+                const blended = prior * 0.7 + observed * 0.3;
+                setEstimatedSendChunksPerSec(blended);
+              }
+            }
+
             setStatus("Send succeeded.");
             stopSendTimer();
             return;

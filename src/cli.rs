@@ -51,11 +51,11 @@ pub enum Commands {
         print_start_block_hash: bool,
 
         /// Minimum confirmations required when resolving accepting block hash.
-        #[arg(long, default_value_t = 1)]
+        #[arg(long, default_value_t = 0)]
         start_block_hash_min_confirmations: u64,
 
         /// Max seconds to wait for accepting block hash when --print-start-block-hash is set.
-        #[arg(long, default_value_t = 120)]
+        #[arg(long, default_value_t = 15)]
         start_block_hash_timeout_secs: u64,
     },
     

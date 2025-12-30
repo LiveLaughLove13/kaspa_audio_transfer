@@ -91,6 +91,10 @@
               <dd id="resultChunkCount"></dd>
             </div>
             <div class="result-row">
+              <dt>Estimated upload time</dt>
+              <dd id="resultUploadTime"></dd>
+            </div>
+            <div class="result-row">
               <dt>Total network fee (KAS)</dt>
               <dd id="resultTotalFee"></dd>
             </div>
@@ -191,7 +195,7 @@
               </div>
             </label>
             <label class="field">
-              <button class="field-label field-help" type="button" data-help-key="receiveStartBlockHash">Start block hash (optional)</button>
+              <button class="field-label field-help" type="button" data-help-key="receiveStartBlockHash">Accepted block hash (optional)</button>
               <input id="receiveStartBlockHash" class="field-input" type="text" placeholder="block hash" autocomplete="off" />
             </label>
             <label class="field">
@@ -283,7 +287,7 @@
                 Choose an <strong>Output name</strong> (example: <code>received.mp3</code>).
               </li>
               <li>
-                Optional: If you have a known <strong>start block hash</strong>, provide it to speed up scanning.
+                Optional: If you have the transaction's <strong>accepted block hash</strong>, provide it to speed up scanning.
               </li>
               <li>
                 Click <strong>Download received file</strong> and wait for the download timer to complete.
@@ -330,7 +334,7 @@
             <li>Start: drop a file or click to browse. Keep the window open during upload.</li>
             <li>Estimate: verifies file size/chunk count and estimates network fees before you send.</li>
             <li>Send: progress shows submitted chunks; the top status line shows queued/running/errors.</li>
-            <li>Receive: optional start block hash can speed up scanning on older txids.</li>
+            <li>Receive: optional accepted block hash can speed up scanning on older txids.</li>
             <li>Library: lists downloaded/saved files; use Refresh to rescan.</li>
           </ul>
         </div>
@@ -349,7 +353,7 @@
 
         <div class="modal__block">
           <div class="modal__block-header">
-            <div class="modal__block-label">EXAMPLE</div>
+            <div class="modal__block-label">VALUE</div>
             <button id="fieldHelpCopyBtn" class="btn-secondary" type="button">Copy</button>
           </div>
           <pre class="modal__code"><code id="fieldHelpCopyText"></code></pre>
@@ -362,6 +366,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=8"></script>
+    <script src="app.js?v=9"></script>
   </body>
 </html>
