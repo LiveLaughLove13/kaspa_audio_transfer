@@ -29,7 +29,8 @@ const KAT_TYPE_CHUNK: u8 = 2;
 const MAX_STANDARD_COMPUTE_MASS: u64 = 100_000;
 const MAX_STANDARD_TRANSIENT_MASS: u64 = 100_000;
 const MAX_STANDARD_STORAGE_MASS: u64 = 100_000;
-const MAX_CHUNK_DATA_SIZE: usize = 20_000;
+const MAX_CHUNK_DATA_SIZE: usize = 24_000;
+const VIRTUAL_CHAIN_PAGE_LIMIT: u64 = 250;
 
 type FileId = [u8; 16];
 
@@ -1270,15 +1271,14 @@ impl KaspaClient {
                 dag.pruning_point_hash
             };
 
-            let page_limit: u64 = 50;
+            let page_limit: u64 = VIRTUAL_CHAIN_PAGE_LIMIT;
             let mut page: u32 = 0;
             let mut used_user_start_hash = effective_start_block_hash.is_some();
             'scan_tx: while page < 2000u32 {
-
                 if !used_user_start_hash && page >= Self::MAX_RPC_SCAN_PAGES_FROM_PRUNING {
                     Self::progress_end();
                     return Err(AudioTransferError::KaspaRpc(
-                        "Transaction not found in mempool or virtual chain scan (hit pruning-point scan limit; assuming node is pruned)"
+                        "Transaction not found in mempool or virtual chain scan (hit pruning-point scan limit). Hint: pass receive --start-block-hash with a scan-usable block hash (often from explorer 'Block hashes'), or run the tx-accepting-block-hash command to derive one from your node."
                             .to_string(),
                     ));
                 }
@@ -1308,6 +1308,9 @@ impl KaspaClient {
                                 eprintln!(
                                     "Info: start_block_hash header not found on this node; falling back to pruning point {}",
                                     dag.pruning_point_hash
+                                );
+                                eprintln!(
+                                    "Hint: on pruned nodes, the explorer 'Accepting block hash' may be unavailable locally; try a tx 'Block hashes' value instead."
                                 );
                                 start_hash = dag.pruning_point_hash;
                                 used_user_start_hash = false;
@@ -1402,7 +1405,6 @@ impl KaspaClient {
         let mut chunks: Vec<Option<Vec<u8>>> = vec![None; manifest.total_chunks as usize];
         let mut found_chunks: usize = 0;
 
-        // mempool
         if let Ok(entries) = self
             .client
             .get_mempool_entries(true, false)
@@ -1425,9 +1427,7 @@ impl KaspaClient {
             }
         }
 
-        // paged accepted scan
         let mut effective_start_block_hash = start_block_hash;
-
         loop {
             let dag = self
                 .client
@@ -1441,7 +1441,7 @@ impl KaspaClient {
             } else {
                 dag.pruning_point_hash
             };
-            let page_limit: u64 = 50;
+            let page_limit: u64 = VIRTUAL_CHAIN_PAGE_LIMIT;
 
             let mut page: u32 = 0;
             let mut used_user_start_hash = effective_start_block_hash.is_some();
@@ -1475,6 +1475,9 @@ impl KaspaClient {
                                 eprintln!(
                                     "Info: start_block_hash header not found on this node; falling back to pruning point {}",
                                     dag.pruning_point_hash
+                                );
+                                eprintln!(
+                                    "Hint: on pruned nodes, the explorer 'Accepting block hash' may be unavailable locally; try a tx 'Block hashes' value instead."
                                 );
                                 start_hash = dag.pruning_point_hash;
                                 used_user_start_hash = false;
@@ -1517,7 +1520,6 @@ impl KaspaClient {
                 let Some(last) = added.last().copied() else {
                     break;
                 };
-
                 if last == start_hash {
                     break;
                 }
@@ -1540,6 +1542,9 @@ impl KaspaClient {
         }
 
         if chunks.iter().any(|c| c.is_none()) {
+            eprintln!(
+                "Info: unable to locate all chunks via node RPC scan; falling back to api.kaspa.org. Hint: for reliable RPC retrieval, pass receive --start-block-hash using an explorer 'Block hashes' value (scan anchor) rather than the txid."
+            );
             return self.receive_audio_via_rest(tx_id_str, start_block_hash).await;
         }
 
@@ -1613,6 +1618,9 @@ impl KaspaClient {
                                     "Info: start_block_hash header not found on this node; falling back to pruning point {}",
                                     dag.pruning_point_hash
                                 );
+                                eprintln!(
+                                    "Hint: on pruned nodes, the explorer 'Accepting block hash' may be unavailable locally; try a tx 'Block hashes' value instead."
+                                );
                                 start_hash = dag.pruning_point_hash;
                                 used_user_start_hash = false;
                                 page = 0;
@@ -1631,7 +1639,12 @@ impl KaspaClient {
                 for bucket in response.accepted_transaction_ids.iter() {
                     if bucket.accepted_transaction_ids.iter().any(|id| *id == tx_id) {
                         Self::progress_end();
-                        return Ok(Some(bucket.accepting_block_hash.to_string()));
+                        eprintln!(
+                            "Accepting block hash (may be unavailable locally on pruned nodes): {}",
+                            bucket.accepting_block_hash
+                        );
+                        eprintln!("Start block hash (scan anchor): {}", start_hash);
+                        return Ok(Some(start_hash.to_string()));
                     }
                 }
 

@@ -46,7 +46,8 @@ pub enum Commands {
         #[arg(long, default_value_t = 0.0)]
         amount: f64,
 
-        /// After sending, attempt to print the accepting block hash (useful as receive --start-block-hash).
+        /// After sending, attempt to print a scan-usable start block hash (useful as receive --start-block-hash).
+        /// Note: the explorer's "Accepting block hash" may not be available on pruned nodes.
         #[arg(long, default_value_t = false)]
         print_start_block_hash: bool,
 
@@ -72,7 +73,10 @@ pub enum Commands {
         #[arg(long, default_value = "grpc://127.0.0.1:16110")]
         rpc_url: String,
 
-        /// Optional block hash to start scanning from (speeds up lookup when known)
+        /// Optional block hash to start scanning from (speeds up lookup when known).
+        /// Must be a block hash (NOT the txid). On pruned nodes, some explorer hashes
+        /// (often the "accepting block hash") may not exist on your local node; if you
+        /// see a fallback to REST, try using one of the tx's "Block hashes" from the explorer.
         #[arg(long)]
         start_block_hash: Option<String>,
     },
@@ -95,7 +99,7 @@ pub enum Commands {
         amount: f64,
     },
 
-    /// Resolve the accepting block hash for a transaction id (useful for receive --start-block-hash)
+    /// Resolve a scan-usable start block hash for a transaction id (useful for receive --start-block-hash)
     TxAcceptingBlockHash {
         /// Transaction ID to resolve
         tx_id: String,
@@ -104,7 +108,9 @@ pub enum Commands {
         #[arg(long, default_value = "grpc://127.0.0.1:16110")]
         rpc_url: String,
 
-        /// Optional block hash to start scanning from (speeds up lookup when known)
+        /// Optional block hash to start scanning from (speeds up lookup when known).
+        /// Must be a block hash (NOT the txid). On pruned nodes, use a recent block hash
+        /// (e.g. from the explorer "Block hashes" field) if the accepting hash is not available.
         #[arg(long)]
         start_block_hash: Option<String>,
 

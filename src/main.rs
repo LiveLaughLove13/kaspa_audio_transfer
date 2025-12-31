@@ -153,9 +153,9 @@ async fn send_audio(
         .await?;
 
         if let Some(h) = accepting {
-            println!("Start block hash: {}", h);
+            println!("Start block hash (scan anchor): {}", h);
         } else {
-            println!("Start block hash: <not found>");
+            println!("Start block hash (scan anchor): <not found>");
         }
     }
 
