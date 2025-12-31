@@ -2,26 +2,213 @@
 
 use std::{
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
-    sync::Mutex,
+    process::{Command, Stdio},
 };
 
-use std::io::{self, BufRead};
+use std::io::{BufRead, Read};
 
 use base64::{engine::general_purpose, Engine as _};
 use serde::Serialize;
-use tauri::{Manager, Window};
-
-struct BackendProcess(Mutex<Option<Child>>);
+use tauri::Window;
 
 #[derive(Serialize)]
 struct WalletStatus {
     unlocked_account_id: Option<String>,
 }
 
+#[tauri::command(rename_all = "camelCase")]
+async fn wallet_receive_file(
+    window: Window,
+    tx_id: String,
+    output_path: String,
+    rpc_url: Option<String>,
+    start_block_hash: Option<String>,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let tx_id = tx_id.trim();
+        if tx_id.is_empty() {
+            return Err("missing txId".to_string());
+        }
+
+        let output_path = output_path.trim();
+        if output_path.is_empty() {
+            return Err("missing outputPath".to_string());
+        }
+
+        let exe = find_kaspa_audio_transfer_binary()?;
+        let mut cmd = Command::new(exe);
+        cmd.arg("receive")
+            .arg(tx_id)
+            .arg("--output")
+            .arg(output_path)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        if let Some(u) = rpc_url.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            cmd.arg("--rpc-url").arg(u);
+        }
+        if let Some(h) = start_block_hash.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            cmd.arg("--start-block-hash").arg(h);
+        }
+
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| format!("failed to run kaspa_audio_transfer: {e}"))?;
+
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| "failed to capture stdout".to_string())?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| "failed to capture stderr".to_string())?;
+
+        let stdout_buf = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+        let stderr_buf = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+        let last_progress: std::sync::Arc<std::sync::Mutex<Option<(u32, u32)>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(None));
+
+        let w1 = window.clone();
+        let out_buf1 = stdout_buf.clone();
+        let lp1 = last_progress.clone();
+        let stdout_handle = std::thread::spawn(move || {
+            pump_receive_output(stdout, w1, out_buf1, lp1);
+        });
+
+        let w2 = window.clone();
+        let err_buf2 = stderr_buf.clone();
+        let lp2 = last_progress.clone();
+        let stderr_handle = std::thread::spawn(move || {
+            pump_receive_output(stderr, w2, err_buf2, lp2);
+        });
+
+        let status = child
+            .wait()
+            .map_err(|e| format!("failed waiting for kaspa_audio_transfer: {e}"))?;
+
+        let _ = stdout_handle.join();
+        let _ = stderr_handle.join();
+
+        if !status.success() {
+            let stderr = stderr_buf.lock().unwrap_or_else(|e| e.into_inner());
+            let stdout = stdout_buf.lock().unwrap_or_else(|e| e.into_inner());
+            let stderr = stderr.trim();
+            let stdout = stdout.trim();
+            return Err(format!(
+                "kaspa_audio_transfer receive failed with status {}: {}{}{}",
+                status,
+                if stderr.is_empty() { "" } else { stderr },
+                if !stderr.is_empty() && !stdout.is_empty() { "\n" } else { "" },
+                if stdout.is_empty() { "" } else { stdout }
+            ));
+        }
+
+        let (_found, total) = last_progress
+            .lock()
+            .ok()
+            .and_then(|g| *g)
+            .unwrap_or((1, 1));
+        let total = total.max(1);
+        let _ = window.emit(
+            "kaspa_receive_progress",
+            KaspaReceiveProgressEvent {
+                found_chunks: total,
+                total_chunks: Some(total),
+            },
+        );
+
+        Ok(output_path.to_string())
+    })
+    .await
+    .map_err(|e| format!("receive task join error: {e}"))?
+}
+
+fn parse_receive_progress_line(line: &str) -> Option<(u32, u32)> {
+    let trimmed = line.trim();
+
+    if let Some(rest) = trimmed.strip_prefix("Scanning chunks | ") {
+        let first = rest.split('|').next().unwrap_or("").trim();
+        if let Some((a, b)) = first.split_once('/') {
+            let found = a.trim().parse::<u32>().ok()?;
+            let total = b.trim().parse::<u32>().ok()?;
+            return Some((found, total));
+        }
+    }
+
+    if let Some(pos) = trimmed.find("| ") {
+        let after = &trimmed[pos + 2..];
+        let first = after.split('|').next().unwrap_or("").trim();
+        if let Some((a, b)) = first.split_once('/') {
+            if let Some(rest_b) = b.split_whitespace().next() {
+                let found = a.trim().parse::<u32>().ok()?;
+                let total = rest_b.trim().parse::<u32>().ok()?;
+                if trimmed.to_lowercase().contains("rest scanning") {
+                    return Some((found, total));
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn pump_receive_output<R: Read>(
+    mut r: R,
+    window: Window,
+    buf: std::sync::Arc<std::sync::Mutex<String>>,
+    last_progress: std::sync::Arc<std::sync::Mutex<Option<(u32, u32)>>>,
+) {
+    let mut tmp = [0u8; 4096];
+    let mut pending: Vec<u8> = Vec::new();
+
+    loop {
+        let n = match r.read(&mut tmp) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(_) => break,
+        };
+
+        if let Ok(mut b) = buf.lock() {
+            b.push_str(&String::from_utf8_lossy(&tmp[..n]));
+        }
+
+        pending.extend_from_slice(&tmp[..n]);
+
+        loop {
+            let pos = pending
+                .iter()
+                .position(|b| *b == b'\n' || *b == b'\r');
+            let Some(i) = pos else { break; };
+
+            let line_bytes: Vec<u8> = pending.drain(..=i).collect();
+            let line = String::from_utf8_lossy(&line_bytes);
+
+            if let Some((found, total)) = parse_receive_progress_line(&line) {
+                if let Ok(mut lp) = last_progress.lock() {
+                    *lp = Some((found, total));
+                }
+                let _ = window.emit(
+                    "kaspa_receive_progress",
+                    KaspaReceiveProgressEvent {
+                        found_chunks: found,
+                        total_chunks: Some(total),
+                    },
+                );
+            }
+        }
+    }
+}
+
 #[derive(Clone, Serialize)]
 struct KaspaSendProgressEvent {
     submitted_chunks: u32,
+    total_chunks: Option<u32>,
+}
+
+#[derive(Clone, Serialize)]
+struct KaspaReceiveProgressEvent {
+    found_chunks: u32,
     total_chunks: Option<u32>,
 }
 
@@ -425,119 +612,17 @@ fn reveal_in_folder(path: String) -> Result<(), String> {
     Ok(())
 }
 
-fn candidate_backend_paths() -> Vec<PathBuf> {
-    let exe_name = if cfg!(windows) {
-        "kaspa_file_web_backend.exe"
-    } else {
-        "kaspa_file_web_backend"
-    };
-
-    // This file lives at: desktop/src-tauri/src/main.rs
-    // We want to locate: web/backend/target/{debug,release}/kaspa_file_web_backend(.exe)
-    let mut out = Vec::new();
-
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let repo_root = manifest_dir
-        .parent() // desktop
-        .and_then(|p| p.parent()) // repo root
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| manifest_dir.clone());
-
-    out.push(repo_root.join("web").join("backend").join("target").join("debug").join(exe_name));
-    out.push(repo_root.join("web").join("backend").join("target").join("release").join(exe_name));
-
-    // If user already built backend elsewhere.
-    if let Ok(v) = std::env::var("KASPA_WEB_BACKEND_EXE") {
-        let p = PathBuf::from(v);
-        out.insert(0, p);
-    }
-
-    out
-}
-
-fn find_backend_exe() -> Option<PathBuf> {
-    candidate_backend_paths()
-        .into_iter()
-        .find(|p| std::fs::metadata(p).is_ok())
-}
-
-fn spawn_backend() -> io::Result<Child> {
-    // In dev/debug builds, prefer `cargo run` so the backend always matches the current source.
-    // This avoids confusing stale-binary issues (e.g. missing newer API routes).
-    let prefer_cargo_run = cfg!(debug_assertions) && std::env::var("KASPA_WEB_BACKEND_EXE").is_err();
-    let inherit_stdio = cfg!(debug_assertions);
-
-    if !prefer_cargo_run {
-        // Prefer running an existing compiled backend binary.
-        if let Some(exe) = find_backend_exe() {
-            let mut cmd = Command::new(exe);
-            cmd.env("BACKEND_PORT", "8080")
-                .stdin(Stdio::null());
-
-            if inherit_stdio {
-                cmd.stdout(Stdio::inherit()).stderr(Stdio::inherit());
-            } else {
-                cmd.stdout(Stdio::null()).stderr(Stdio::null());
-            }
-
-            return cmd.spawn();
-        }
-    }
-
-    // Fallback to cargo run (dev convenience).
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let repo_root = manifest_dir
-        .parent()
-        .and_then(|p| p.parent())
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| manifest_dir.clone());
-
-    let backend_manifest = repo_root.join("web").join("backend").join("Cargo.toml");
-
-    let mut cmd = Command::new("cargo");
-    cmd.arg("run")
-        .arg("--manifest-path")
-        .arg(backend_manifest)
-        .env("BACKEND_PORT", "8080")
-        .stdin(Stdio::null());
-
-    if inherit_stdio {
-        cmd.stdout(Stdio::inherit()).stderr(Stdio::inherit());
-    } else {
-        cmd.stdout(Stdio::null()).stderr(Stdio::null());
-    }
-
-    cmd.spawn().map_err(|e| io::Error::new(io::ErrorKind::Other, format!("failed to spawn backend via cargo: {e}")))
-}
-
 fn main() {
     tauri::Builder::default()
-        .manage(BackendProcess(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             wallet_status,
             wallet_core_send_file_b64,
             wallet_send_file_b64,
+            wallet_receive_file,
             open_file,
             reveal_in_folder
         ])
-        .setup(|app| {
-            let backend = spawn_backend().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
-            let state = app.state::<BackendProcess>();
-            *state.0.lock().unwrap() = Some(backend);
-            Ok(())
-        })
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
-        .run(|app_handle, event| {
-            if let tauri::RunEvent::ExitRequested { api, .. } = event {
-                api.prevent_exit();
-
-                let state = app_handle.state::<BackendProcess>();
-                if let Some(mut child) = state.0.lock().unwrap().take() {
-                    let _ = child.kill();
-                }
-
-                std::process::exit(0);
-            }
-        });
+        .run(|_app_handle, _event| {});
 }

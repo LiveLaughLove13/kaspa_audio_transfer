@@ -105,6 +105,141 @@
         color: #ffb4b4;
         display: none;
       }
+
+      .progressRow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      .progressRing {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .ring {
+        width: 44px;
+        height: 44px;
+      }
+
+      .ring circle {
+        fill: none;
+        stroke-width: 5;
+      }
+
+      .ring-bg {
+        stroke: rgba(159, 186, 195, 0.22);
+      }
+
+      .ring-fg {
+        stroke: var(--kaspa-accent);
+        stroke-linecap: round;
+        transform: rotate(-90deg);
+        transform-origin: 50% 50%;
+        transition: stroke-dashoffset 150ms linear;
+      }
+
+      .ringText {
+        display: grid;
+        gap: 2px;
+      }
+
+      .ringTitle {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      .ringValue {
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.01em;
+      }
+
+      .link {
+        color: var(--kaspa-accent);
+        text-decoration: none;
+        font-weight: 700;
+      }
+
+      .link:hover {
+        text-decoration: underline;
+      }
+
+      .modalOverlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.58);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        z-index: 9999;
+      }
+
+      .modal {
+        width: min(560px, 96vw);
+        border-radius: 16px;
+        background: rgba(15, 21, 30, 0.92);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow);
+        padding: 18px;
+      }
+
+      .modalHeader {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .modalTitle {
+        font-weight: 800;
+        letter-spacing: 0.01em;
+      }
+
+      .modalClose {
+        cursor: pointer;
+        border: 1px solid var(--border);
+        background: rgba(15, 21, 30, 0.55);
+        color: var(--text);
+        border-radius: 10px;
+        padding: 6px 10px;
+        font-weight: 800;
+      }
+
+      .modalBody {
+        margin-top: 10px;
+        color: var(--text-muted);
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .modalActions {
+        margin-top: 14px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: flex-end;
+      }
+
+      .modalBtn {
+        cursor: pointer;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: rgba(15, 21, 30, 0.55);
+        color: var(--text);
+        font-weight: 800;
+      }
+
+      .modalBtnPrimary {
+        background: linear-gradient(135deg, var(--kaspa-accent) 0%, var(--kaspa-primary) 100%);
+        color: #03181a;
+      }
     </style>
   </head>
   <body>
@@ -118,61 +253,442 @@
           </div>
         </div>
         <div class="pill" id="pill">
-          <span style="display:inline-flex;align-items:center;gap:8px;">
-            <span class="spinner" aria-hidden="true"></span>
-            <span id="pillText">Starting local service…</span>
-          </span>
+          <span id="pillText">Ready</span>
         </div>
       </div>
 
-      <p class="status" id="status">
-        Launching your local Kaspa transfer service and preparing the interface.
-      </p>
+      <p class="status" id="status">Send or receive a file using your local Kaspa node RPC.</p>
 
       <div class="error" id="error"></div>
 
-      <div class="row">
-        <div class="pill">This window will automatically continue when ready.</div>
-        <div class="pill" id="endpoint">http://localhost:8080</div>
+      <div style="margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <section style="border:1px solid var(--border);border-radius:14px;padding:16px;background:rgba(15,21,30,0.45);">
+          <div style="font-weight:700;margin-bottom:10px;">Send</div>
+
+          <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">File</label>
+          <input id="sendFile" type="file" style="width:100%;" />
+
+          <div style="height:10px;"></div>
+
+          <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">From private key (hex)</label>
+          <input id="sendPriv" type="password" autocomplete="off" spellcheck="false" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+
+          <div style="height:10px;"></div>
+
+          <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">To address</label>
+          <input id="sendTo" type="text" spellcheck="false" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+
+          <div style="display:flex;gap:10px;margin-top:10px;">
+            <div style="flex:1;">
+              <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Amount (KAS)</label>
+              <input id="sendAmount" type="number" step="0.00000001" value="0" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+            </div>
+            <div style="flex:1;">
+              <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">RPC URL</label>
+              <input id="sendRpc" type="text" value="grpc://127.0.0.1:16110" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+            </div>
+          </div>
+
+          <div class="progressRow">
+            <button id="sendBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:linear-gradient(135deg,var(--kaspa-accent) 0%,var(--kaspa-primary) 100%);color:#03181a;font-weight:800;">Send</button>
+            <div class="progressRing">
+              <svg class="ring" viewBox="0 0 44 44" aria-hidden="true">
+                <circle class="ring-bg" cx="22" cy="22" r="18"></circle>
+                <circle class="ring-fg" id="sendRing" cx="22" cy="22" r="18"></circle>
+              </svg>
+              <div class="ringText">
+                <div class="ringTitle">Progress</div>
+                <div class="ringValue" id="sendProgress">Idle</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:10px;font-size:12px;color:var(--text-muted);word-break:break-all;">
+            <div><span style="opacity:0.85;">TXID:</span> <span id="sendTxid">—</span></div>
+            <div style="margin-top:6px;">
+              <a class="link" href="#" id="sendExplorerLink">Open in Explorer</a>
+            </div>
+          </div>
+        </section>
+
+        <section style="border:1px solid var(--border);border-radius:14px;padding:16px;background:rgba(15,21,30,0.45);">
+          <div style="font-weight:700;margin-bottom:10px;">Receive</div>
+
+          <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Transaction ID (manifest txid)</label>
+          <input id="recvTx" type="text" spellcheck="false" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+
+          <div style="display:flex;gap:10px;margin-top:10px;">
+            <div style="flex:1;">
+              <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Start block hash (scan anchor)</label>
+              <input id="recvStart" type="text" spellcheck="false" placeholder="Optional" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+              <div style="margin-top:6px;font-size:11px;color:var(--text-muted);line-height:1.35;">
+                <a class="link" href="#" id="explorerTip">Explorer: copy the first “Block hashes” value</a>
+              </div>
+            </div>
+            <div style="flex:1;">
+              <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">RPC URL</label>
+              <input id="recvRpc" type="text" value="grpc://127.0.0.1:16110" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+            </div>
+          </div>
+
+          <div style="height:10px;"></div>
+
+          <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Save as</label>
+          <input id="recvOut" type="text" value="received.bin" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+
+          <div class="progressRow">
+            <button id="recvBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Receive</button>
+            <div class="progressRing">
+              <svg class="ring" viewBox="0 0 44 44" aria-hidden="true">
+                <circle class="ring-bg" cx="22" cy="22" r="18"></circle>
+                <circle class="ring-fg" id="recvRing" cx="22" cy="22" r="18"></circle>
+              </svg>
+              <div class="ringText">
+                <div class="ringTitle">Progress</div>
+                <div class="ringValue" id="recvStatus">Idle</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:10px;display:flex;gap:10px;">
+            <button id="openBtn" style="cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:700;">Open</button>
+            <button id="revealBtn" style="cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:700;">Reveal</button>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div class="modalOverlay" id="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal">
+        <div class="modalHeader">
+          <div class="modalTitle" id="modalTitle">Notification</div>
+          <button class="modalClose" id="modalClose" type="button">Close</button>
+        </div>
+        <div class="modalBody" id="modalBody"></div>
+        <div class="modalActions" id="modalActions"></div>
       </div>
     </div>
 
     <script>
-      const baseUrl = "http://localhost:8080";
-      const statusEl = document.getElementById("status");
-      const pillTextEl = document.getElementById("pillText");
       const errorEl = document.getElementById("error");
+      const sendBtn = document.getElementById("sendBtn");
+      const sendFileEl = document.getElementById("sendFile");
+      const sendPrivEl = document.getElementById("sendPriv");
+      const sendToEl = document.getElementById("sendTo");
+      const sendAmountEl = document.getElementById("sendAmount");
+      const sendRpcEl = document.getElementById("sendRpc");
+      const sendProgressEl = document.getElementById("sendProgress");
+      const sendTxidEl = document.getElementById("sendTxid");
+      const sendRingEl = document.getElementById("sendRing");
+      const sendExplorerLinkEl = document.getElementById("sendExplorerLink");
 
-      async function ping() {
-        try {
-          const r = await fetch(`${baseUrl}/health`, { cache: "no-store" });
-          return r.ok;
-        } catch {
-          return false;
-        }
+      const recvBtn = document.getElementById("recvBtn");
+      const recvTxEl = document.getElementById("recvTx");
+      const recvStartEl = document.getElementById("recvStart");
+      const recvRpcEl = document.getElementById("recvRpc");
+      const recvOutEl = document.getElementById("recvOut");
+      const recvStatusEl = document.getElementById("recvStatus");
+      const recvRingEl = document.getElementById("recvRing");
+      const explorerTipEl = document.getElementById("explorerTip");
+      const openBtn = document.getElementById("openBtn");
+      const revealBtn = document.getElementById("revealBtn");
+
+      const modalOverlayEl = document.getElementById("modalOverlay");
+      const modalCloseEl = document.getElementById("modalClose");
+      const modalTitleEl = document.getElementById("modalTitle");
+      const modalBodyEl = document.getElementById("modalBody");
+      const modalActionsEl = document.getElementById("modalActions");
+
+      let lastReceivedPath = "";
+
+      const RING_R = 18;
+      const RING_CIRC = 2 * Math.PI * RING_R;
+
+      function setRing(circleEl, pct) {
+        const p = Number.isFinite(pct) ? Math.max(0, Math.min(1, pct)) : 0;
+        if (!circleEl) return;
+        circleEl.style.strokeDasharray = String(RING_CIRC);
+        circleEl.style.strokeDashoffset = String(RING_CIRC * (1 - p));
       }
 
-      async function waitForBackend() {
-        const start = Date.now();
-        const timeoutMs = 30000;
+      function getExplorerTxUrl(txid) {
+        const t = String(txid || "").trim();
+        if (!t) return "https://explorer.kaspa.org/transactions/";
+        return `https://explorer.kaspa.org/transactions/${t}`;
+      }
 
-        while (Date.now() - start < timeoutMs) {
-          if (await ping()) {
-            pillTextEl.textContent = "Opening…";
-            statusEl.textContent = "Service is up. Loading the app…";
-            window.location.href = baseUrl;
+      async function openExternal(url) {
+        const shell = window.__TAURI__?.shell;
+        if (shell?.open) {
+          await shell.open(url);
+          return;
+        }
+        window.open(url, "_blank");
+      }
+
+      function closeModal() {
+        modalOverlayEl.style.display = "none";
+        modalTitleEl.textContent = "Notification";
+        modalBodyEl.textContent = "";
+        modalActionsEl.innerHTML = "";
+      }
+
+      function showModal({ title, body, actions }) {
+        modalTitleEl.textContent = title || "Notification";
+        modalBodyEl.textContent = body || "";
+        modalActionsEl.innerHTML = "";
+        (actions || []).forEach((a) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = `modalBtn ${a.primary ? "modalBtnPrimary" : ""}`;
+          b.textContent = a.label || "Action";
+          b.addEventListener("click", async () => {
+            try {
+              if (a.onClick) await a.onClick();
+            } finally {
+              if (!a.keepOpen) closeModal();
+            }
+          });
+          modalActionsEl.appendChild(b);
+        });
+        modalOverlayEl.style.display = "flex";
+      }
+
+      function setError(msg) {
+        if (!msg) {
+          errorEl.style.display = "none";
+          errorEl.textContent = "";
+          return;
+        }
+        errorEl.style.display = "block";
+        errorEl.textContent = msg;
+      }
+
+      async function readFileB64(file) {
+        return new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onerror = () => reject(new Error("failed reading file"));
+          r.onload = () => resolve(String(r.result || ""));
+          r.readAsDataURL(file);
+        });
+      }
+
+      async function init() {
+        const tauri = window.__TAURI__?.tauri;
+        const eventApi = window.__TAURI__?.event;
+
+        if (!tauri?.invoke) {
+          setError("Tauri API not available. Are you running the desktop app through Tauri?");
+          return;
+        }
+
+        modalCloseEl.addEventListener("click", closeModal);
+        modalOverlayEl.addEventListener("click", (e) => {
+          if (e.target === modalOverlayEl) closeModal();
+        });
+        window.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") closeModal();
+        });
+
+        if (eventApi?.listen) {
+          await eventApi.listen("kaspa_send_progress", (ev) => {
+            const p = ev?.payload || {};
+            const done = Number(p.submitted_chunks || 0);
+            const total = p.total_chunks == null ? null : Number(p.total_chunks);
+            if (total && total > 0) {
+              sendProgressEl.textContent = `${done}/${total}`;
+              setRing(sendRingEl, done / total);
+            } else {
+              sendProgressEl.textContent = `${done}`;
+              setRing(sendRingEl, 0);
+            }
+          });
+
+          await eventApi.listen("kaspa_receive_progress", (ev) => {
+            const p = ev?.payload || {};
+            const found = Number(p.found_chunks || 0);
+            const total = p.total_chunks == null ? null : Number(p.total_chunks);
+            if (total && total > 0) {
+              recvStatusEl.textContent = `${found}/${total}`;
+              setRing(recvRingEl, found / total);
+            } else {
+              recvStatusEl.textContent = `${found}`;
+              setRing(recvRingEl, 0);
+            }
+          });
+        }
+
+        sendBtn.addEventListener("click", async () => {
+          setError("");
+          sendTxidEl.textContent = "—";
+          sendProgressEl.textContent = "Working…";
+          setRing(sendRingEl, 0);
+
+          const f = sendFileEl.files && sendFileEl.files[0];
+          if (!f) {
+            sendProgressEl.textContent = "Idle";
+            setError("Select a file to send.");
             return;
           }
-          await new Promise((r) => setTimeout(r, 500));
-        }
 
-        pillTextEl.textContent = "Not ready";
-        statusEl.textContent = "The local service did not start in time.";
-        errorEl.style.display = "block";
-        errorEl.textContent = "If you already have something using port 8080, close it and restart the desktop app.";
+          const fromPrivateKey = sendPrivEl.value.trim();
+          const toAddress = sendToEl.value.trim();
+          const rpcUrl = sendRpcEl.value.trim();
+          const amountKas = Number(sendAmountEl.value || "0");
+
+          if (!fromPrivateKey) {
+            sendProgressEl.textContent = "Idle";
+            setError("Enter from private key.");
+            return;
+          }
+          if (!toAddress) {
+            sendProgressEl.textContent = "Idle";
+            setError("Enter to address.");
+            return;
+          }
+
+          try {
+            const fileB64 = await readFileB64(f);
+            const txid = await tauri.invoke("wallet_send_file_b64", {
+              window: null,
+              accountId: null,
+              fileB64,
+              toAddress,
+              amountKas,
+              rpcUrl,
+              resumeFrom: null,
+              resumeOutputIndex: 1,
+              fileName: f.name,
+              fromPrivateKey,
+            });
+            sendTxidEl.textContent = String(txid);
+            sendProgressEl.textContent = "Done";
+            setRing(sendRingEl, 1);
+
+            showModal({
+              title: "Send complete",
+              body: `Transaction ID:\n${txid}\n\nNext: open the explorer transaction and copy the first value under \"Block hashes\" to use as a scan anchor for receive.`
+              ,
+              actions: [
+                {
+                  label: "Open in Explorer",
+                  primary: true,
+                  onClick: () => openExternal(getExplorerTxUrl(txid)),
+                },
+                { label: "Close" },
+              ],
+            });
+          } catch (e) {
+            sendProgressEl.textContent = "Failed";
+            setRing(sendRingEl, 0);
+            setError(String(e));
+
+            showModal({
+              title: "Send failed",
+              body: String(e),
+              actions: [{ label: "Close", primary: true }],
+            });
+          }
+        });
+
+        sendExplorerLinkEl.addEventListener("click", async (e) => {
+          e.preventDefault();
+          await openExternal(getExplorerTxUrl(sendTxidEl.textContent));
+        });
+
+        recvBtn.addEventListener("click", async () => {
+          setError("");
+          recvStatusEl.textContent = "Working…";
+          setRing(recvRingEl, 0);
+
+          const txId = recvTxEl.value.trim();
+          const outputPath = recvOutEl.value.trim();
+          const rpcUrl = recvRpcEl.value.trim();
+          const startBlockHash = recvStartEl.value.trim();
+
+          if (!txId) {
+            recvStatusEl.textContent = "Idle";
+            setError("Enter a transaction id.");
+            return;
+          }
+          if (!outputPath) {
+            recvStatusEl.textContent = "Idle";
+            setError("Enter an output filename/path.");
+            return;
+          }
+
+          try {
+            const outPath = await tauri.invoke("wallet_receive_file", {
+              window: null,
+              txId,
+              outputPath,
+              rpcUrl,
+              startBlockHash: startBlockHash || null,
+            });
+            lastReceivedPath = String(outPath);
+            recvStatusEl.textContent = "Done";
+            setRing(recvRingEl, 1);
+
+            showModal({
+              title: "Receive complete",
+              body: `File saved to:\n${lastReceivedPath}`,
+              actions: [
+                {
+                  label: "Open file",
+                  primary: true,
+                  onClick: () => tauri.invoke("open_file", { path: lastReceivedPath }),
+                },
+                {
+                  label: "Reveal in folder",
+                  onClick: () => tauri.invoke("reveal_in_folder", { path: lastReceivedPath }),
+                },
+                { label: "Close" },
+              ],
+            });
+          } catch (e) {
+            recvStatusEl.textContent = "Failed";
+            setRing(recvRingEl, 0);
+            setError(String(e));
+
+            showModal({
+              title: "Receive failed",
+              body: String(e),
+              actions: [{ label: "Close", primary: true }],
+            });
+          }
+        });
+
+        explorerTipEl.addEventListener("click", async (e) => {
+          e.preventDefault();
+          await openExternal(getExplorerTxUrl(recvTxEl.value));
+        });
+
+        openBtn.addEventListener("click", async () => {
+          if (!lastReceivedPath) {
+            setError("No received file yet.");
+            return;
+          }
+          try {
+            await tauri.invoke("open_file", { path: lastReceivedPath });
+          } catch (e) {
+            setError(String(e));
+          }
+        });
+
+        revealBtn.addEventListener("click", async () => {
+          if (!lastReceivedPath) {
+            setError("No received file yet.");
+            return;
+          }
+          try {
+            await tauri.invoke("reveal_in_folder", { path: lastReceivedPath });
+          } catch (e) {
+            setError(String(e));
+          }
+        });
       }
 
-      waitForBackend();
+      init();
     </script>
   </body>
 </html>
