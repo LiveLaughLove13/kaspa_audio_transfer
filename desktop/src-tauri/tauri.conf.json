@@ -24,13 +24,19 @@
       },
       "shell": {
         "open": true
+      },
+      "clipboard": {
+        "readText": true,
+        "writeText": true
       }
     },
     "windows": [
       {
         "title": "Kaspa Audio Transfer",
         "width": 1200,
-        "height": 780,
+        "height": 800,
+        "minWidth": 1200,
+        "minHeight": 800,
         "resizable": true,
         "fullscreen": false
       }

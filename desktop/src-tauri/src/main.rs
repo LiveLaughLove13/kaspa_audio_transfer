@@ -1,5 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod wallet_vault;
+mod wallet_kaspa;
+
 use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -7,13 +10,123 @@ use std::{
 
 use std::io::{BufRead, Read};
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 use base64::{engine::general_purpose, Engine as _};
 use serde::Serialize;
 use tauri::Window;
 
+const DEFAULT_WALLET_DERIVATION_PATH: &str = "m/44'/111111'/0'/0/0";
+
+fn bytes_to_lower_hex(bytes: &[u8]) -> String {
+    const LUT: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        out.push(LUT[(b >> 4) as usize] as char);
+        out.push(LUT[(b & 0x0f) as usize] as char);
+    }
+    out
+}
+
 #[derive(Serialize)]
 struct WalletStatus {
     unlocked_account_id: Option<String>,
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn wallet_profiles_list() -> Result<Vec<wallet_vault::WalletProfileInfo>, String> {
+    wallet_vault::list_profiles()
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn wallet_profile_create_mnemonic(username: String, password: String, word_count: u32) -> Result<String, String> {
+    wallet_vault::create_profile_mnemonic(&username, &password, word_count)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn wallet_profile_import_mnemonic(
+    username: String,
+    password: String,
+    phrase: String,
+    mnemonic_password: Option<String>,
+) -> Result<(), String> {
+    wallet_vault::import_profile_mnemonic(
+        &username,
+        &password,
+        &phrase,
+        mnemonic_password.as_deref(),
+    )
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn wallet_profile_import_private_key(username: String, password: String, private_key_hex: String) -> Result<(), String> {
+    wallet_vault::import_profile_private_key(&username, &password, &private_key_hex)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn wallet_profile_delete(username: String) -> Result<(), String> {
+    wallet_vault::delete_profile(&username)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn wallet_profiles_clear_all() -> Result<(), String> {
+    wallet_vault::clear_all_profiles()
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn wallet_unlock(username: String, password: String) -> Result<(), String> {
+    wallet_vault::unlock_profile(&username, &password)
+}
+
+#[tauri::command]
+fn wallet_lock() -> Result<(), String> {
+    wallet_vault::lock_wallet();
+    Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn wallet_unlocked_username() -> Result<Option<String>, String> {
+    Ok(wallet_vault::get_unlocked_username())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn wallet_derive_receive_address(network: String, derivation_path: String) -> Result<String, String> {
+    wallet_vault::derive_receive_address(&network, &derivation_path)
+}
+
+#[tauri::command]
+fn wallet_debug_unlocked_material_fingerprint() -> Result<String, String> {
+    wallet_vault::debug_unlocked_material_fingerprint()
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn wallet_get_balance(network: String, derivation_path: String, rpc_url: Option<String>) -> Result<f64, String> {
+    wallet_kaspa::wallet_get_balance_kas(&network, &derivation_path, rpc_url.as_deref()).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn wallet_send_kas(
+    network: String,
+    derivation_path: String,
+    rpc_url: Option<String>,
+    to_address: String,
+    amount_kas: f64,
+) -> Result<String, String> {
+    wallet_kaspa::wallet_send_kas(
+        &network,
+        &derivation_path,
+        rpc_url.as_deref(),
+        &to_address,
+        amount_kas,
+    )
+    .await
+}
+
+#[cfg(windows)]
+fn set_no_window(cmd: &mut Command) {
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    cmd.creation_flags(CREATE_NO_WINDOW);
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -43,6 +156,9 @@ async fn wallet_receive_file(
             .arg(output_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+
+        #[cfg(windows)]
+        set_no_window(&mut cmd);
 
         if let Some(u) = rpc_url.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
             cmd.arg("--rpc-url").arg(u);
@@ -345,16 +461,6 @@ async fn wallet_core_send_file_b64(
     file_name: Option<String>,
     from_private_key: Option<String>,
 ) -> Result<String, String> {
-    // The UI prefers this command when using wallet-core for key custody.
-    // This desktop build currently does not integrate kaspa wallet-core signing.
-    // Trigger the UI fallback path unless a private key is explicitly provided.
-    if from_private_key.as_deref().map(str::trim).unwrap_or("").is_empty() {
-        return Err(
-            "wallet_core_send_file_b64 is not available in this build (wallet-core signing not implemented); use legacy wallet_send_file_b64 with fromPrivateKey"
-                .to_string(),
-        );
-    }
-
     tauri::async_runtime::spawn_blocking(move || {
         let _ = account_id;
 
@@ -363,12 +469,16 @@ async fn wallet_core_send_file_b64(
             return Err("missing toAddress".to_string());
         }
 
-        let from_private_key = from_private_key
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| "missing fromPrivateKey".to_string())?
-            .to_string();
+        let from_private_key = match from_private_key.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            Some(v) => v.to_string(),
+            None => {
+                // Use the unlocked local wallet vault if available.
+                // Network does not affect key derivation; we pass a valid value for validation.
+                let keypair = wallet_vault::derive_keypair_for_path("mainnet", DEFAULT_WALLET_DERIVATION_PATH)?;
+                let sk = keypair.secret_key();
+                bytes_to_lower_hex(&sk.secret_bytes())
+            }
+        };
 
         if !amount_kas.is_finite() || amount_kas < 0.0 {
             return Err("invalid amountKas".to_string());
@@ -394,6 +504,9 @@ async fn wallet_core_send_file_b64(
             .arg(format!("{:.8}", amount_kas))
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+
+        #[cfg(windows)]
+        set_no_window(&mut cmd);
 
         if let Some(u) = rpc_url.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
             cmd.arg("--rpc-url").arg(u);
@@ -615,6 +728,19 @@ fn reveal_in_folder(path: String) -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
+            wallet_profiles_list,
+            wallet_profile_create_mnemonic,
+            wallet_profile_import_mnemonic,
+            wallet_profile_import_private_key,
+            wallet_profile_delete,
+            wallet_profiles_clear_all,
+            wallet_unlock,
+            wallet_lock,
+            wallet_unlocked_username,
+            wallet_derive_receive_address,
+            wallet_debug_unlocked_material_fingerprint,
+            wallet_get_balance,
+            wallet_send_kas,
             wallet_status,
             wallet_core_send_file_b64,
             wallet_send_file_b64,
