@@ -140,6 +140,7 @@
               <div style="margin-top:6px;display:flex;gap:10px;">
                 <input id="walletSendTo" type="text" placeholder="To address" spellcheck="false" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
               </div>
+              <div id="walletSendToResolved" class="knsPreview" style="display:none;"></div>
               <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
                 <input id="walletSendAmount" type="number" step="0.00000001" value="0" style="width:140px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
                 <button id="walletSendKasBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:linear-gradient(135deg,var(--kaspa-accent) 0%,var(--kaspa-primary) 100%);color:#03181a;font-weight:900;">Send</button>
@@ -263,6 +264,7 @@
                     <div style="margin-top:10px;display:flex;gap:10px;">
                       <input id="studioAudioTo" type="text" placeholder="To address" spellcheck="false" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
                     </div>
+                    <div id="studioAudioToResolved" class="knsPreview" style="display:none;"></div>
                     <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
                       <input id="studioAudioAmount" type="number" step="0.00000001" value="0" style="width:160px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
                       <input id="studioAudioRpc" type="text" value="grpc://127.0.0.1:16110" style="flex:1;min-width:220px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
@@ -323,6 +325,7 @@
                     <div style="margin-top:10px;display:flex;gap:10px;">
                       <input id="studioVideoTo" type="text" placeholder="To address" spellcheck="false" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
                     </div>
+                    <div id="studioVideoToResolved" class="knsPreview" style="display:none;"></div>
                     <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
                       <input id="studioVideoAmount" type="number" step="0.00000001" value="0" style="width:160px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
                       <input id="studioVideoRpc" type="text" value="grpc://127.0.0.1:16110" style="flex:1;min-width:220px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
@@ -376,6 +379,7 @@
 
                 <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">To address</label>
                 <input id="sendTo" type="text" spellcheck="false" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                <div id="sendToResolved" class="knsPreview" style="display:none;"></div>
 
                 <div style="display:flex;gap:10px;margin-top:10px;">
                   <div style="flex:1;">

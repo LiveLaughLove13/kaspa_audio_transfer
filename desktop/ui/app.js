@@ -7,6 +7,7 @@
       const sendPrivEl = document.getElementById("sendPriv");
       const sendPrivAutoHintEl = document.getElementById("sendPrivAutoHint");
       const sendToEl = document.getElementById("sendTo");
+      const sendToResolvedEl = document.getElementById("sendToResolved");
       const sendAmountEl = document.getElementById("sendAmount");
       const sendRpcEl = document.getElementById("sendRpc");
       const sendProgressEl = document.getElementById("sendProgress");
@@ -62,6 +63,7 @@
       const studioAudioPrivEl = document.getElementById("studioAudioPriv");
       const studioAudioPrivAutoHintEl = document.getElementById("studioAudioPrivAutoHint");
       const studioAudioToEl = document.getElementById("studioAudioTo");
+      const studioAudioToResolvedEl = document.getElementById("studioAudioToResolved");
       const studioAudioAmountEl = document.getElementById("studioAudioAmount");
       const studioAudioRpcEl = document.getElementById("studioAudioRpc");
 
@@ -81,6 +83,7 @@
       const studioVideoPrivEl = document.getElementById("studioVideoPriv");
       const studioVideoPrivAutoHintEl = document.getElementById("studioVideoPrivAutoHint");
       const studioVideoToEl = document.getElementById("studioVideoTo");
+      const studioVideoToResolvedEl = document.getElementById("studioVideoToResolved");
       const studioVideoAmountEl = document.getElementById("studioVideoAmount");
       const studioVideoRpcEl = document.getElementById("studioVideoRpc");
 
@@ -127,6 +130,7 @@
       const walletBalanceEl = document.getElementById("walletBalance");
       const walletBalanceRefreshBtnEl = document.getElementById("walletBalanceRefreshBtn");
       const walletSendToEl = document.getElementById("walletSendTo");
+      const walletSendToResolvedEl = document.getElementById("walletSendToResolved");
       const walletSendAmountEl = document.getElementById("walletSendAmount");
       const walletSendKasBtnEl = document.getElementById("walletSendKasBtn");
       const walletSendKasTxidEl = document.getElementById("walletSendKasTxid");
@@ -247,6 +251,39 @@
         sendAmountEl.value = "0";
         sendRpcEl.value = "grpc://127.0.0.1:16110";
 
+        if (sendToResolvedEl) {
+          sendToResolvedEl.style.display = "none";
+          sendToResolvedEl.className = "knsPreview";
+          sendToResolvedEl.textContent = "";
+          delete sendToResolvedEl.dataset.knsInput;
+          delete sendToResolvedEl.dataset.knsNetwork;
+          delete sendToResolvedEl.dataset.resolvedAddr;
+        }
+        if (walletSendToResolvedEl) {
+          walletSendToResolvedEl.style.display = "none";
+          walletSendToResolvedEl.className = "knsPreview";
+          walletSendToResolvedEl.textContent = "";
+          delete walletSendToResolvedEl.dataset.knsInput;
+          delete walletSendToResolvedEl.dataset.knsNetwork;
+          delete walletSendToResolvedEl.dataset.resolvedAddr;
+        }
+        if (studioAudioToResolvedEl) {
+          studioAudioToResolvedEl.style.display = "none";
+          studioAudioToResolvedEl.className = "knsPreview";
+          studioAudioToResolvedEl.textContent = "";
+          delete studioAudioToResolvedEl.dataset.knsInput;
+          delete studioAudioToResolvedEl.dataset.knsNetwork;
+          delete studioAudioToResolvedEl.dataset.resolvedAddr;
+        }
+        if (studioVideoToResolvedEl) {
+          studioVideoToResolvedEl.style.display = "none";
+          studioVideoToResolvedEl.className = "knsPreview";
+          studioVideoToResolvedEl.textContent = "";
+          delete studioVideoToResolvedEl.dataset.knsInput;
+          delete studioVideoToResolvedEl.dataset.knsNetwork;
+          delete studioVideoToResolvedEl.dataset.resolvedAddr;
+        }
+
         recvTxEl.value = "";
         recvStartEl.value = "";
         recvRpcEl.value = "grpc://127.0.0.1:16110";
@@ -355,24 +392,160 @@
           apply(studioVideoPrivEl, studioVideoPrivAutoHintEl);
         }
 
+        function walletNetworkToKnsNetwork(walletNetwork) {
+          const n = String(walletNetwork || "").trim().toLowerCase();
+          if (!n || n === "mainnet") return "mainnet";
+          if (n === "testnet") return "tn10";
+          if (n === "tn10" || n === "testnet10") return "tn10";
+          return null;
+        }
+
+        function knsNetworkFromRpcUrl(rpcUrl) {
+          const s = String(rpcUrl || "").trim().toLowerCase();
+          if (!s) return "mainnet";
+          if (s.includes("testnet") || s.includes("tn10") || s.includes(":16210")) return "tn10";
+          return "mainnet";
+        }
+
+        function isKnsNameCandidate(input) {
+          const s = String(input || "").trim().toLowerCase();
+          return !!s && !s.includes(":") && s.endsWith(".kas");
+        }
+
+        function clearKnsPreview(previewEl) {
+          if (!previewEl) return;
+          previewEl.style.display = "none";
+          previewEl.className = "knsPreview";
+          previewEl.textContent = "";
+          delete previewEl.dataset.knsInput;
+          delete previewEl.dataset.knsNetwork;
+          delete previewEl.dataset.resolvedAddr;
+        }
+
+        function setKnsPreviewResolving(previewEl) {
+          if (!previewEl) return;
+          previewEl.style.display = "block";
+          previewEl.className = "knsPreview";
+          previewEl.textContent = "Resolving…";
+        }
+
+        function setKnsPreviewResolved(previewEl, input, knsNetwork, resolvedAddr) {
+          if (!previewEl) return;
+          previewEl.style.display = "block";
+          previewEl.className = "knsPreview";
+          previewEl.dataset.knsInput = String(input || "").trim();
+          previewEl.dataset.knsNetwork = String(knsNetwork || "");
+          previewEl.dataset.resolvedAddr = String(resolvedAddr || "").trim();
+          previewEl.innerHTML = `Resolves to: <span class="knsPreviewAddr">${String(resolvedAddr || "").trim()}</span>`;
+        }
+
+        function setKnsPreviewError(previewEl, msg) {
+          if (!previewEl) return;
+          previewEl.style.display = "block";
+          previewEl.className = "knsPreview knsPreviewError";
+          previewEl.textContent = String(msg || "KNS resolution failed");
+          delete previewEl.dataset.resolvedAddr;
+        }
+
+        function getCachedResolved(previewEl, input, knsNetwork) {
+          if (!previewEl) return null;
+          const in0 = String(previewEl.dataset.knsInput || "");
+          const net0 = String(previewEl.dataset.knsNetwork || "");
+          const addr = String(previewEl.dataset.resolvedAddr || "");
+          if (!addr) return null;
+          if (in0 !== String(input || "").trim()) return null;
+          if (net0 !== String(knsNetwork || "")) return null;
+          return addr;
+        }
+
+        async function resolveToAddressMaybeKns(input, knsNetwork) {
+          const raw = String(input || "").trim();
+          if (!raw) return "";
+          if (raw.includes(":")) return raw;
+
+          const owner = await tauri.invoke("kns_domain_owner", {
+            domain: raw,
+            network: knsNetwork || null,
+          });
+          const out = String(owner || "").trim();
+          if (!out) throw new Error("KNS resolution returned empty address");
+          return out;
+        }
+
+        function debounce(fn, ms) {
+          let t = null;
+          return (...args) => {
+            if (t) clearTimeout(t);
+            t = setTimeout(() => {
+              t = null;
+              fn(...args);
+            }, ms);
+          };
+        }
+
+        function attachKnsPreview({ inputEl, previewEl, getKnsNetwork }) {
+          if (!inputEl || !previewEl) return;
+
+          let seq = 0;
+
+          const run = async () => {
+            const raw = String(inputEl.value || "").trim();
+            const knsNetwork = getKnsNetwork ? getKnsNetwork() : null;
+
+            clearKnsPreview(previewEl);
+            if (!isKnsNameCandidate(raw)) return;
+
+            const mySeq = ++seq;
+            setKnsPreviewResolving(previewEl);
+            try {
+              const resolved = await resolveToAddressMaybeKns(raw, knsNetwork);
+              if (mySeq !== seq) return;
+              if (!resolved) throw new Error("KNS resolution returned empty address");
+              setKnsPreviewResolved(previewEl, raw, knsNetwork, resolved);
+            } catch (e) {
+              if (mySeq !== seq) return;
+              setKnsPreviewError(previewEl, `KNS: ${String(e)}`);
+            }
+          };
+
+          const runDebounced = debounce(run, 450);
+          inputEl.addEventListener("input", runDebounced);
+          inputEl.addEventListener("blur", run);
+
+          if (getKnsNetwork) {
+            const onNetChange = () => runDebounced();
+            if (sendRpcEl && inputEl === sendToEl) sendRpcEl.addEventListener("input", onNetChange);
+            if (studioAudioRpcEl && inputEl === studioAudioToEl) studioAudioRpcEl.addEventListener("input", onNetChange);
+            if (studioVideoRpcEl && inputEl === studioVideoToEl) studioVideoRpcEl.addEventListener("input", onNetChange);
+            if (walletNetworkEl && inputEl === walletSendToEl) walletNetworkEl.addEventListener("change", onNetChange);
+          }
+        }
+
         if (!tauri?.invoke) {
           setError("Tauri API not available. Are you running the desktop app through Tauri?");
           return;
         }
 
-        async function refreshNodeBundleDir() {
-          try {
-            const d = await tauri.invoke("node_bundle_get_dir", {});
-            nodeBundleDir = String(d || "");
-          } catch (_) {
-            nodeBundleDir = "";
-          }
-
-          if (nodeBundleDirOutEl) nodeBundleDirOutEl.textContent = nodeBundleDir || "—";
-          if (nodeBundleOpenBtnEl) nodeBundleOpenBtnEl.disabled = !nodeBundleDir;
-          if (nodeBundleOpenBtnEl) nodeBundleOpenBtnEl.style.opacity = nodeBundleDir ? "1" : "0.6";
-          if (nodeBundleOpenBtnEl) nodeBundleOpenBtnEl.style.cursor = nodeBundleDir ? "pointer" : "not-allowed";
-        }
+        attachKnsPreview({
+          inputEl: sendToEl,
+          previewEl: sendToResolvedEl,
+          getKnsNetwork: () => knsNetworkFromRpcUrl(sendRpcEl?.value || ""),
+        });
+        attachKnsPreview({
+          inputEl: walletSendToEl,
+          previewEl: walletSendToResolvedEl,
+          getKnsNetwork: () => walletNetworkToKnsNetwork(walletNetworkEl?.value || ""),
+        });
+        attachKnsPreview({
+          inputEl: studioAudioToEl,
+          previewEl: studioAudioToResolvedEl,
+          getKnsNetwork: () => knsNetworkFromRpcUrl(studioAudioRpcEl?.value || ""),
+        });
+        attachKnsPreview({
+          inputEl: studioVideoToEl,
+          previewEl: studioVideoToResolvedEl,
+          getKnsNetwork: () => knsNetworkFromRpcUrl(studioVideoRpcEl?.value || ""),
+        });
 
         modalCloseEl.addEventListener("click", closeModal);
         modalOverlayEl.addEventListener("click", (e) => {
@@ -1035,7 +1208,11 @@
                 showModal({ title: "Nothing to send", body: "Record audio first.", actions: [{ label: "OK", primary: true }] });
                 return;
               }
-              const toAddress = studioAudioToEl?.value.trim() || "";
+              const toAddressInput = studioAudioToEl?.value.trim() || "";
+              const knsNetwork = knsNetworkFromRpcUrl(studioAudioRpcEl?.value || "");
+              const cached = getCachedResolved(studioAudioToResolvedEl, toAddressInput, knsNetwork);
+              const toAddress = cached || (await resolveToAddressMaybeKns(toAddressInput, knsNetwork));
+              if (studioAudioToEl) studioAudioToEl.value = toAddress;
               const amountKas = Number(studioAudioAmountEl?.value || "0");
               const rpcUrl = studioAudioRpcEl?.value.trim() || "";
               const fromPrivateKey = isWalletSessionUnlocked ? "" : (studioAudioPrivEl?.value.trim() || "");
@@ -1105,71 +1282,6 @@
           });
         }
 
-        if (studioVideoStartEl) {
-          studioVideoStartEl.addEventListener("click", async () => {
-            setError("");
-            try {
-              await refreshStudioDevices();
-              await startStudioVideo();
-            } catch (e) {
-              setError(String(e));
-              showModal({ title: "Video recording error", body: String(e), actions: [{ label: "Close", primary: true }] });
-            }
-          });
-        }
-
-        if (studioVideoStopEl) {
-          studioVideoStopEl.addEventListener("click", async () => {
-            setError("");
-            try {
-              stopStudioVideo();
-            } catch (e) {
-              setError(String(e));
-            }
-          });
-        }
-
-        if (studioVideoDeleteEl) {
-          studioVideoDeleteEl.addEventListener("click", async () => {
-            showModal({
-              title: "Delete recording?",
-              body: "This will discard the current video take.",
-              actions: [
-                {
-                  label: "Delete",
-                  primary: true,
-                  onClick: async () => {
-                    clearStudioVideoTake();
-                  },
-                },
-                { label: "Cancel" },
-              ],
-            });
-          });
-        }
-
-        if (studioVideoSaveEl) {
-          studioVideoSaveEl.addEventListener("click", async () => {
-            setError("");
-            try {
-              if (!studioVideoBlob) {
-                showModal({ title: "Nothing to save", body: "Record video first.", actions: [{ label: "OK", primary: true }] });
-                return;
-              }
-              const ts = new Date().toISOString().replace(/[:.]/g, "-");
-              const out = await saveBlobToFile(studioVideoBlob, `kat_video_${ts}.webm`, [
-                { name: "WEBM", extensions: ["webm"] },
-              ]);
-              if (out) {
-                showModal({ title: "Saved", body: `Saved to:\n${out}`, actions: [{ label: "OK", primary: true }] });
-              }
-            } catch (e) {
-              setError(String(e));
-              showModal({ title: "Save failed", body: String(e), actions: [{ label: "Close", primary: true }] });
-            }
-          });
-        }
-
         if (studioVideoSendEl) {
           studioVideoSendEl.addEventListener("click", async () => {
             setError("");
@@ -1178,7 +1290,11 @@
                 showModal({ title: "Nothing to send", body: "Record video first.", actions: [{ label: "OK", primary: true }] });
                 return;
               }
-              const toAddress = studioVideoToEl?.value.trim() || "";
+              const toAddressInput = studioVideoToEl?.value.trim() || "";
+              const knsNetwork = knsNetworkFromRpcUrl(studioVideoRpcEl?.value || "");
+              const cached = getCachedResolved(studioVideoToResolvedEl, toAddressInput, knsNetwork);
+              const toAddress = cached || (await resolveToAddressMaybeKns(toAddressInput, knsNetwork));
+              if (studioVideoToEl) studioVideoToEl.value = toAddress;
               const amountKas = Number(studioVideoAmountEl?.value || "0");
               const rpcUrl = studioVideoRpcEl?.value.trim() || "";
               const fromPrivateKey = isWalletSessionUnlocked ? "" : (studioVideoPrivEl?.value.trim() || "");
@@ -1549,7 +1665,14 @@
             const network = walletNetworkEl.value;
             const rpcUrl = walletRpcUrlEl.value.trim();
             const derivationPath = buildFullPath();
-            const toAddress = walletSendToEl.value.trim();
+            const toAddressInput = walletSendToEl.value.trim();
+            const knsNetwork = walletNetworkToKnsNetwork(network);
+            if (!knsNetwork && !toAddressInput.includes(":")) {
+              throw new Error("KNS is not supported on this network");
+            }
+            const cached = getCachedResolved(walletSendToResolvedEl, toAddressInput, knsNetwork);
+            const toAddress = cached || (await resolveToAddressMaybeKns(toAddressInput, knsNetwork));
+            walletSendToEl.value = toAddress;
             const amountKas = Number(walletSendAmountEl.value || "0");
 
             if (!toAddress) {
@@ -1683,9 +1806,13 @@
             return;
           }
 
-          const fromPrivateKey = sendPrivEl.value.trim();
-          const toAddress = sendToEl.value.trim();
           const rpcUrl = sendRpcEl.value.trim();
+          const knsNetwork = knsNetworkFromRpcUrl(rpcUrl);
+          const fromPrivateKey = sendPrivEl.value.trim();
+          const toAddressInput = sendToEl.value.trim();
+          const cached = getCachedResolved(sendToResolvedEl, toAddressInput, knsNetwork);
+          const toAddress = cached || (await resolveToAddressMaybeKns(toAddressInput, knsNetwork));
+          sendToEl.value = toAddress;
           const amountKas = Number(sendAmountEl.value || "0");
 
           if (!fromPrivateKey) {

@@ -6,6 +6,7 @@ mod wallet_kaspa;
 use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
+    time::Duration,
 };
 
 use std::io::{BufRead, Read};
@@ -14,6 +15,7 @@ use std::io::{BufRead, Read};
 use std::os::windows::process::CommandExt;
 
 use base64::{engine::general_purpose, Engine as _};
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tauri::Window;
 use tauri::api::path::data_dir;
@@ -110,19 +112,83 @@ fn node_bundle_set_dir(dir: Option<String>) -> Result<(), String> {
     save_settings(&settings)
 }
 
-fn bytes_to_lower_hex(bytes: &[u8]) -> String {
-    const LUT: &[u8; 16] = b"0123456789abcdef";
-    let mut out = String::with_capacity(bytes.len() * 2);
-    for &b in bytes {
-        out.push(LUT[(b >> 4) as usize] as char);
-        out.push(LUT[(b & 0x0f) as usize] as char);
-    }
-    out
+#[derive(Debug, Deserialize)]
+struct KnsOwnerData {
+    owner: String,
 }
 
-#[derive(Serialize)]
-struct WalletStatus {
-    unlocked_account_id: Option<String>,
+#[derive(Debug, Deserialize)]
+struct KnsOwnerResponse {
+    success: bool,
+    data: Option<KnsOwnerData>,
+    message: Option<String>,
+    error: Option<String>,
+}
+
+fn kns_env_from_network(network: Option<&str>) -> Result<&'static str, String> {
+    match network.unwrap_or("mainnet").trim().to_ascii_lowercase().as_str() {
+        "mainnet" => Ok("mainnet"),
+        "tn10" | "testnet" | "testnet10" => Ok("tn10"),
+        other => Err(format!("unsupported KNS network: {other}")),
+    }
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn kns_domain_owner(domain: String, network: Option<String>) -> Result<String, String> {
+    let raw = domain.trim();
+    if raw.is_empty() {
+        return Err("domain is empty".to_string());
+    }
+
+    let env = kns_env_from_network(network.as_deref())?;
+
+    let mut d = raw.to_string();
+    if !d.to_ascii_lowercase().ends_with(".kas") {
+        d.push_str(".kas");
+    }
+
+    let encoded = urlencoding::encode(&d);
+    let url = format!("https://api.knsdomains.org/{env}/api/v1/{encoded}/owner");
+
+    let client = Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("failed to build http client: {e}"))?;
+
+    let resp = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("failed to call KNS API: {e}"))?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_else(|_| "<no body>".to_string());
+        return Err(format!("KNS API error {}: {}", status.as_u16(), body));
+    }
+
+    let parsed = resp
+        .json::<KnsOwnerResponse>()
+        .await
+        .map_err(|e| format!("failed to parse KNS response: {e}"))?;
+
+    if parsed.success {
+        let owner = parsed
+            .data
+            .map(|d| d.owner)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        if owner.is_empty() {
+            return Err("KNS response missing owner".to_string());
+        }
+        Ok(owner)
+    } else {
+        Err(parsed
+            .error
+            .or(parsed.message)
+            .unwrap_or_else(|| "KNS resolution failed".to_string()))
+    }
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -599,6 +665,11 @@ struct KaspaReceiveProgressEvent {
     total_chunks: Option<u32>,
 }
 
+#[derive(Clone, Serialize)]
+struct WalletStatus {
+    unlocked_account_id: Option<String>,
+}
+
 #[tauri::command]
 fn wallet_status() -> Result<WalletStatus, String> {
     Ok(WalletStatus {
@@ -694,6 +765,15 @@ fn decode_b64_payload(payload: &str) -> Result<Vec<u8>, String> {
     general_purpose::STANDARD
         .decode(b64)
         .map_err(|e| format!("invalid base64 payload: {e}"))
+}
+
+fn bytes_to_lower_hex(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        use std::fmt::Write;
+        let _ = write!(&mut out, "{:02x}", b);
+    }
+    out
 }
 
 fn parse_total_chunks_from_line(line: &str) -> Option<u32> {
@@ -1090,6 +1170,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             node_bundle_get_dir,
             node_bundle_set_dir,
+            kns_domain_owner,
             wallet_profiles_list,
             wallet_profile_create_mnemonic,
             wallet_profile_import_mnemonic,
