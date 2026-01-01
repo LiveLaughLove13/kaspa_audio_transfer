@@ -541,6 +541,20 @@
           return;
         }
 
+        async function refreshNodeBundleDir() {
+          try {
+            const d = await tauri.invoke("node_bundle_get_dir", {});
+            nodeBundleDir = String(d || "");
+          } catch (_) {
+            nodeBundleDir = "";
+          }
+
+          if (nodeBundleDirOutEl) nodeBundleDirOutEl.textContent = nodeBundleDir || "—";
+          if (nodeBundleOpenBtnEl) nodeBundleOpenBtnEl.disabled = !nodeBundleDir;
+          if (nodeBundleOpenBtnEl) nodeBundleOpenBtnEl.style.opacity = nodeBundleDir ? "1" : "0.6";
+          if (nodeBundleOpenBtnEl) nodeBundleOpenBtnEl.style.cursor = nodeBundleDir ? "pointer" : "not-allowed";
+        }
+
         attachKnsPreview({
           inputEl: sendToEl,
           previewEl: sendToResolvedEl,
@@ -1044,6 +1058,14 @@
           studioVideoBlob = null;
           studioVideoChunks = [];
           studioVideoFilePath = "";
+          if (studioVideoStream) {
+            try {
+              studioVideoStream.getTracks().forEach((t) => t.stop());
+            } catch (_) {
+              // ignore
+            }
+            studioVideoStream = null;
+          }
           if (studioVideoPlaybackEl) {
             try {
               if (studioVideoPlaybackEl.src) URL.revokeObjectURL(studioVideoPlaybackEl.src);
@@ -1074,27 +1096,52 @@
           const camId = studioVideoCamEl?.value || "";
           const micId = studioVideoMicEl?.value || "";
 
-          const audioStream = await navigator.mediaDevices.getUserMedia({
-            audio: micId ? { deviceId: { exact: micId } } : true,
-            video: false,
-          });
-
-          let videoStream;
-          if (source === "screen") {
-            videoStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-          } else {
-            videoStream = await navigator.mediaDevices.getUserMedia({
-              video: camId ? { deviceId: { exact: camId } } : true,
-              audio: false,
+          let audioStream = null;
+          let videoStream = null;
+          try {
+            audioStream = await navigator.mediaDevices.getUserMedia({
+              audio: micId ? { deviceId: { exact: micId } } : true,
+              video: false,
             });
+
+            if (source === "screen") {
+              videoStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+            } else {
+              videoStream = await navigator.mediaDevices.getUserMedia({
+                video: camId ? { deviceId: { exact: camId } } : true,
+                audio: false,
+              });
+            }
+          } catch (e) {
+            try {
+              if (videoStream) videoStream.getTracks().forEach((t) => t.stop());
+            } catch (_) {}
+            try {
+              if (audioStream) audioStream.getTracks().forEach((t) => t.stop());
+            } catch (_) {}
+            throw e;
           }
 
           const tracks = [...videoStream.getVideoTracks(), ...audioStream.getAudioTracks()];
           studioVideoStream = new MediaStream(tracks);
 
+          try {
+            const vTrack = videoStream.getVideoTracks()[0];
+            if (vTrack) {
+              vTrack.addEventListener("ended", () => {
+                try {
+                  stopStudioVideo();
+                } catch (_) {}
+              });
+            }
+          } catch (_) {}
+
           if (studioVideoLiveEl) {
             studioVideoLiveEl.srcObject = studioVideoStream;
             studioVideoLiveEl.style.display = "block";
+            try {
+              await studioVideoLiveEl.play();
+            } catch (_) {}
           }
 
           studioVideoMime = pickFirstSupportedMime([
@@ -1150,6 +1197,24 @@
         function stopStudioVideo() {
           if (studioVideoRecorder && studioVideoRecorder.state !== "inactive") {
             studioVideoRecorder.stop();
+            return;
+          }
+
+          // If recorder is already inactive (or failed), ensure streams are stopped.
+          if (studioVideoStream) {
+            try {
+              studioVideoStream.getTracks().forEach((t) => t.stop());
+            } catch (_) {
+              // ignore
+            }
+            studioVideoStream = null;
+          }
+          if (studioVideoLiveEl) {
+            studioVideoLiveEl.srcObject = null;
+            studioVideoLiveEl.style.display = "none";
+          }
+          if (studioVideoStatusEl && studioVideoStatusEl.textContent === "Recording…") {
+            studioVideoStatusEl.textContent = "Idle";
           }
         }
 
@@ -1297,6 +1362,69 @@
               if (studioAudioStatusEl) studioAudioStatusEl.textContent = "Failed";
               setError(String(e));
               showModal({ title: "Send failed", body: String(e), actions: [{ label: "Close", primary: true }] });
+            }
+          });
+        }
+
+        if (studioVideoStartEl) {
+          studioVideoStartEl.addEventListener("click", async () => {
+            setError("");
+            try {
+              await refreshStudioDevices();
+              await startStudioVideo();
+            } catch (e) {
+              setError(String(e));
+              showModal({ title: "Video recording error", body: String(e), actions: [{ label: "Close", primary: true }] });
+            }
+          });
+        }
+
+        if (studioVideoStopEl) {
+          studioVideoStopEl.addEventListener("click", async () => {
+            setError("");
+            try {
+              stopStudioVideo();
+            } catch (e) {
+              setError(String(e));
+            }
+          });
+        }
+
+        if (studioVideoDeleteEl) {
+          studioVideoDeleteEl.addEventListener("click", async () => {
+            showModal({
+              title: "Delete recording?",
+              body: "This will discard the current video take.",
+              actions: [
+                {
+                  label: "Delete",
+                  primary: true,
+                  onClick: async () => {
+                    clearStudioVideoTake();
+                  },
+                },
+                { label: "Cancel" },
+              ],
+            });
+          });
+        }
+
+        if (studioVideoSaveEl) {
+          studioVideoSaveEl.addEventListener("click", async () => {
+            setError("");
+            try {
+              if (!studioVideoBlob) {
+                showModal({ title: "Nothing to save", body: "Record video first.", actions: [{ label: "OK", primary: true }] });
+                return;
+              }
+              const ts = new Date().toISOString().replace(/[:.]/g, "-");
+              const out = await saveBlobToFile(studioVideoBlob, `kat_video_${ts}.webm`, [{ name: "WEBM", extensions: ["webm"] }]);
+              if (out) {
+                showModal({ title: "Saved", body: `Saved to:\n${out}`, actions: [{ label: "OK", primary: true }] });
+              }
+            } catch (e) {
+              setError(String(e));
+              showModal({ title: "Save failed", body: String(e), actions: [{ label: "Close", primary: true }] });
             }
           });
         }

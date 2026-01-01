@@ -1,7 +1,7 @@
 {
   "build": {
-    "beforeBuildCommand": "",
-    "beforeDevCommand": "",
+    "beforeBuildCommand": "cargo build --release --manifest-path ../Cargo.toml -p kaspa_audio_transfer",
+    "beforeDevCommand": "cargo build --manifest-path ../Cargo.toml -p kaspa_audio_transfer",
     "devPath": "../ui",
     "distDir": "../ui",
     "withGlobalTauri": true
@@ -49,6 +49,7 @@
       "active": true,
       "targets": ["msi"],
       "identifier": "com.kaspa.audio.transfer",
+      "resources": ["../../target/release/kaspa_audio_transfer.exe"],
       "icon": ["icons/icon.ico"]
     }
   }
