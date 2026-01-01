@@ -14,10 +14,101 @@ use std::io::{BufRead, Read};
 use std::os::windows::process::CommandExt;
 
 use base64::{engine::general_purpose, Engine as _};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::Window;
+use tauri::api::path::data_dir;
 
 const DEFAULT_WALLET_DERIVATION_PATH: &str = "m/44'/111111'/0'/0/0";
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct AppSettings {
+    #[serde(default)]
+    node_bundle_dir: Option<String>,
+}
+
+fn app_data_root_dir() -> Result<PathBuf, String> {
+    let mut base = data_dir().ok_or_else(|| "unable to resolve OS data_dir".to_string())?;
+    base.push("KaspaAudioTransfer");
+    std::fs::create_dir_all(&base).map_err(|e| e.to_string())?;
+    Ok(base)
+}
+
+fn settings_file_path() -> Result<PathBuf, String> {
+    Ok(app_data_root_dir()?.join("settings.json"))
+}
+
+fn load_settings() -> Result<AppSettings, String> {
+    let p = settings_file_path()?;
+    match std::fs::read_to_string(&p) {
+        Ok(s) => serde_json::from_str(&s).map_err(|e| format!("failed to parse settings.json: {e}")),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(AppSettings::default()),
+        Err(e) => Err(format!("failed to read settings.json: {e}")),
+    }
+}
+
+fn save_settings(settings: &AppSettings) -> Result<(), String> {
+    let p = settings_file_path()?;
+    let s = serde_json::to_string_pretty(settings).map_err(|e| format!("failed to serialize settings.json: {e}"))?;
+    std::fs::write(&p, s).map_err(|e| format!("failed to write settings.json: {e}"))
+}
+
+fn validate_node_bundle_dir(dir: &Path) -> Result<(), String> {
+    if !dir.exists() {
+        return Err("selected folder does not exist".to_string());
+    }
+    if !dir.is_dir() {
+        return Err("selected path is not a folder".to_string());
+    }
+
+    let mut missing: Vec<String> = Vec::new();
+
+    let kaspad_ok = dir.join("kaspad.exe").exists() || dir.join("kaspad").exists();
+    if !kaspad_ok {
+        missing.push("kaspad.exe".to_string());
+    }
+
+    let bridge_ok = dir.join("stratum-bridge.exe").exists() || dir.join("stratum-bridge").exists();
+    if !bridge_ok {
+        missing.push("stratum-bridge.exe".to_string());
+    }
+
+    if !dir.join("config.yaml").exists() {
+        missing.push("config.yaml".to_string());
+    }
+
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "folder is missing required files:\n{}",
+            missing.join("\n")
+        ))
+    }
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn node_bundle_get_dir() -> Result<Option<String>, String> {
+    let settings = load_settings()?;
+    Ok(settings.node_bundle_dir)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn node_bundle_set_dir(dir: Option<String>) -> Result<(), String> {
+    let mut settings = load_settings()?;
+
+    match dir.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(d) => {
+            let p = PathBuf::from(d);
+            validate_node_bundle_dir(&p)?;
+            settings.node_bundle_dir = Some(p.to_string_lossy().to_string());
+        }
+        None => {
+            settings.node_bundle_dir = None;
+        }
+    }
+
+    save_settings(&settings)
+}
 
 fn bytes_to_lower_hex(bytes: &[u8]) -> String {
     const LUT: &[u8; 16] = b"0123456789abcdef";
@@ -121,6 +212,186 @@ async fn wallet_send_kas(
         amount_kas,
     )
     .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn wallet_send_file_path(
+    window: Window,
+    account_id: Option<String>,
+    file_path: String,
+    to_address: String,
+    amount_kas: f64,
+    rpc_url: Option<String>,
+    resume_from: Option<String>,
+    resume_output_index: Option<u32>,
+    _file_name: Option<String>,
+    from_private_key: Option<String>,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _ = account_id;
+
+        let to_address = to_address.trim();
+        if to_address.is_empty() {
+            return Err("missing toAddress".to_string());
+        }
+
+        let file_path = file_path.trim();
+        if file_path.is_empty() {
+            return Err("missing filePath".to_string());
+        }
+        if std::fs::metadata(file_path).is_err() {
+            return Err("filePath not found".to_string());
+        }
+
+        let from_private_key = match from_private_key.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            Some(v) => v.to_string(),
+            None => {
+                let keypair = wallet_vault::derive_keypair_for_path("mainnet", DEFAULT_WALLET_DERIVATION_PATH)?;
+                let sk = keypair.secret_key();
+                bytes_to_lower_hex(&sk.secret_bytes())
+            }
+        };
+
+        if !amount_kas.is_finite() || amount_kas < 0.0 {
+            return Err("invalid amountKas".to_string());
+        }
+
+        let exe = find_kaspa_audio_transfer_binary()?;
+        let mut cmd = Command::new(exe);
+        cmd.arg("send")
+            .arg(file_path)
+            .arg("--from-private-key")
+            .arg(from_private_key)
+            .arg("--to-address")
+            .arg(to_address)
+            .arg("--amount")
+            .arg(format!("{:.8}", amount_kas))
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        #[cfg(windows)]
+        set_no_window(&mut cmd);
+
+        if let Some(u) = rpc_url.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            cmd.arg("--rpc-url").arg(u);
+        }
+        if let Some(r) = resume_from.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            cmd.arg("--resume-from").arg(r);
+            cmd.arg("--resume-output-index")
+                .arg(resume_output_index.unwrap_or(1).to_string());
+        }
+
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| format!("failed to run kaspa_audio_transfer: {e}"))?;
+
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| "failed to capture stdout".to_string())?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| "failed to capture stderr".to_string())?;
+
+        let stderr_buf = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+        let stderr_buf2 = stderr_buf.clone();
+        let stderr_handle = std::thread::spawn(move || {
+            let mut r = std::io::BufReader::new(stderr);
+            let mut line = String::new();
+            while let Ok(n) = r.read_line(&mut line) {
+                if n == 0 {
+                    break;
+                }
+                if let Ok(mut buf) = stderr_buf2.lock() {
+                    buf.push_str(line.trim_end());
+                    buf.push('\n');
+                }
+                line.clear();
+            }
+        });
+
+        let mut total_chunks: Option<u32> = None;
+        let mut submitted_chunks: u32 = 0;
+        let mut txid: Option<String> = None;
+
+        let mut r = std::io::BufReader::new(stdout);
+        let mut line = String::new();
+        while let Ok(n) = r.read_line(&mut line) {
+            if n == 0 {
+                break;
+            }
+            let trimmed = line.trim();
+
+            if txid.is_none() {
+                if let Some(rest) = trimmed.strip_prefix("Transaction ID:") {
+                    let v = rest.trim();
+                    if !v.is_empty() {
+                        txid = Some(v.to_string());
+                    }
+                }
+            }
+
+            if total_chunks.is_none() {
+                if let Some(t) = parse_total_chunks_from_line(trimmed) {
+                    total_chunks = Some(t);
+                    let _ = window.emit(
+                        "kaspa_send_progress",
+                        KaspaSendProgressEvent {
+                            submitted_chunks,
+                            total_chunks,
+                        },
+                    );
+                }
+            }
+
+            if let Some((done, t)) = parse_submitted_chunks_from_line(trimmed) {
+                submitted_chunks = done;
+                if total_chunks.is_none() {
+                    total_chunks = t;
+                }
+                let _ = window.emit(
+                    "kaspa_send_progress",
+                    KaspaSendProgressEvent {
+                        submitted_chunks,
+                        total_chunks,
+                    },
+                );
+            }
+
+            line.clear();
+        }
+
+        let status = child
+            .wait()
+            .map_err(|e| format!("failed waiting for kaspa_audio_transfer: {e}"))?;
+
+        let _ = stderr_handle.join();
+
+        if !status.success() {
+            let stderr = stderr_buf.lock().unwrap_or_else(|e| e.into_inner());
+            let stderr = stderr.trim();
+            return Err(format!(
+                "kaspa_audio_transfer send failed with status {}: {}",
+                status,
+                if stderr.is_empty() { "<no stderr>" } else { stderr }
+            ));
+        }
+
+        if let Some(total) = total_chunks {
+            let _ = window.emit(
+                "kaspa_send_progress",
+                KaspaSendProgressEvent {
+                    submitted_chunks: total,
+                    total_chunks: Some(total),
+                },
+            );
+        }
+
+        txid.ok_or_else(|| "send succeeded but no Transaction ID found in output".to_string())
+    })
+    .await
+    .map_err(|e| format!("send task join error: {e}"))?
 }
 
 #[cfg(windows)]
@@ -449,6 +720,95 @@ fn parse_submitted_chunks_from_line(line: &str) -> Option<(u32, Option<u32>)> {
 }
 
 #[tauri::command(rename_all = "camelCase")]
+fn studio_temp_path(file_name: String) -> Result<String, String> {
+    let safe = sanitize_filename(&file_name);
+    let mut dir = std::env::temp_dir();
+    dir.push("KaspaAudioTransfer");
+    dir.push("studio");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let p = dir.join(safe);
+    Ok(p.to_string_lossy().to_string())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn ffmpeg_transcode(input_path: String, output_path: String, kind: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let input_path = input_path.trim();
+        let output_path = output_path.trim();
+        if input_path.is_empty() {
+            return Err("inputPath is empty".to_string());
+        }
+        if output_path.is_empty() {
+            return Err("outputPath is empty".to_string());
+        }
+        if std::fs::metadata(input_path).is_err() {
+            return Err("inputPath not found".to_string());
+        }
+
+        let mut cmd = Command::new("ffmpeg");
+        cmd.arg("-y").arg("-i").arg(input_path);
+
+        match kind.trim().to_ascii_lowercase().as_str() {
+            "mp3" => {
+                cmd.arg("-vn")
+                    .arg("-c:a")
+                    .arg("libmp3lame")
+                    .arg("-q:a")
+                    .arg("2")
+                    .arg(output_path);
+            }
+            "wav" => {
+                cmd.arg("-vn")
+                    .arg("-c:a")
+                    .arg("pcm_s16le")
+                    .arg("-ar")
+                    .arg("44100")
+                    .arg("-ac")
+                    .arg("2")
+                    .arg(output_path);
+            }
+            "mp4" => {
+                cmd.arg("-c:v")
+                    .arg("libx264")
+                    .arg("-preset")
+                    .arg("veryfast")
+                    .arg("-crf")
+                    .arg("23")
+                    .arg("-c:a")
+                    .arg("aac")
+                    .arg("-b:a")
+                    .arg("192k")
+                    .arg("-movflags")
+                    .arg("+faststart")
+                    .arg(output_path);
+            }
+            _ => return Err("kind must be one of: mp3, wav, mp4".to_string()),
+        }
+
+        #[cfg(windows)]
+        set_no_window(&mut cmd);
+
+        let out = cmd
+            .output()
+            .map_err(|e| format!("failed to run ffmpeg (is it installed and on PATH?): {e}"))?;
+
+        if !out.status.success() {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let stderr = stderr.trim();
+            return Err(format!(
+                "ffmpeg failed with status {}: {}",
+                out.status,
+                if stderr.is_empty() { "<no stderr>" } else { stderr }
+            ));
+        }
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("ffmpeg task join error: {e}"))?
+}
+
+#[tauri::command(rename_all = "camelCase")]
 async fn wallet_core_send_file_b64(
     window: Window,
     account_id: Option<String>,
@@ -728,6 +1088,8 @@ fn reveal_in_folder(path: String) -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
+            node_bundle_get_dir,
+            node_bundle_set_dir,
             wallet_profiles_list,
             wallet_profile_create_mnemonic,
             wallet_profile_import_mnemonic,
@@ -744,7 +1106,10 @@ fn main() {
             wallet_status,
             wallet_core_send_file_b64,
             wallet_send_file_b64,
+            wallet_send_file_path,
             wallet_receive_file,
+            studio_temp_path,
+            ffmpeg_transcode,
             open_file,
             reveal_in_folder
         ])

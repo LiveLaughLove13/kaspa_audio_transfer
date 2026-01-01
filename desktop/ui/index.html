@@ -631,7 +631,16 @@
                 <div style="font-size:12px;color:var(--text-muted);word-break:break-all;" id="walletDebugOut">—</div>
               </div>
             </div>
-            <div></div>
+            <div>
+              <div style="font-weight:750;margin-bottom:8px;">Import node tools</div>
+              <div style="font-size:12px;color:var(--text-muted);line-height:1.35;">Select the folder containing <span style="font-weight:850;">kaspad.exe</span>, <span style="font-weight:850;">stratum-bridge.exe</span>, and <span style="font-weight:850;">config.yaml</span>.</div>
+              <div style="margin-top:10px;font-size:12px;color:var(--text-muted);word-break:break-all;">Current: <span id="nodeBundleDirOut">—</span></div>
+              <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+                <button id="nodeBundleImportBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Import</button>
+                <button id="nodeBundleOpenBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Open folder</button>
+                <button id="nodeBundleClearBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255, 120, 120, 0.35);background:rgba(255, 80, 80, 0.12);color:var(--text);font-weight:900;">Clear</button>
+              </div>
+            </div>
           </div>
         </div>
               </section>
@@ -682,6 +691,8 @@
                   <button id="studioAudioDelete" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255, 120, 120, 0.35);background:rgba(255, 80, 80, 0.12);color:var(--text);font-weight:950;">Delete take</button>
                   <div style="flex:1;"></div>
                   <button id="studioAudioSave" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Save</button>
+                  <button id="studioAudioExportMp3" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Export MP3</button>
+                  <button id="studioAudioExportWav" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Export WAV</button>
                   <button id="studioAudioSend" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:950;">Send</button>
                 </div>
 
@@ -745,6 +756,7 @@
                   <button id="studioVideoDelete" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255, 120, 120, 0.35);background:rgba(255, 80, 80, 0.12);color:var(--text);font-weight:950;">Delete take</button>
                   <div style="flex:1;"></div>
                   <button id="studioVideoSave" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Save</button>
+                  <button id="studioVideoExportMp4" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Export MP4</button>
                   <button id="studioVideoSend" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:950;">Send</button>
                 </div>
               </div>
@@ -936,6 +948,8 @@
       const studioAudioStopEl = document.getElementById("studioAudioStop");
       const studioAudioDeleteEl = document.getElementById("studioAudioDelete");
       const studioAudioSaveEl = document.getElementById("studioAudioSave");
+      const studioAudioExportMp3El = document.getElementById("studioAudioExportMp3");
+      const studioAudioExportWavEl = document.getElementById("studioAudioExportWav");
       const studioAudioSendEl = document.getElementById("studioAudioSend");
       const studioAudioStatusEl = document.getElementById("studioAudioStatus");
       const studioAudioPlaybackEl = document.getElementById("studioAudioPlayback");
@@ -953,6 +967,7 @@
       const studioVideoStopEl = document.getElementById("studioVideoStop");
       const studioVideoDeleteEl = document.getElementById("studioVideoDelete");
       const studioVideoSaveEl = document.getElementById("studioVideoSave");
+      const studioVideoExportMp4El = document.getElementById("studioVideoExportMp4");
       const studioVideoSendEl = document.getElementById("studioVideoSend");
       const studioVideoStatusEl = document.getElementById("studioVideoStatus");
       const studioVideoLiveEl = document.getElementById("studioVideoLive");
@@ -1018,6 +1033,11 @@
       const walletDebugBtnEl = document.getElementById("walletDebugBtn");
       const walletDebugOutEl = document.getElementById("walletDebugOut");
 
+      const nodeBundleDirOutEl = document.getElementById("nodeBundleDirOut");
+      const nodeBundleImportBtnEl = document.getElementById("nodeBundleImportBtn");
+      const nodeBundleOpenBtnEl = document.getElementById("nodeBundleOpenBtn");
+      const nodeBundleClearBtnEl = document.getElementById("nodeBundleClearBtn");
+
       const modalOverlayEl = document.getElementById("modalOverlay");
       const modalCloseEl = document.getElementById("modalClose");
       const modalTitleEl = document.getElementById("modalTitle");
@@ -1028,6 +1048,8 @@
 
       let lastReceivedPath = "";
       let selectedSendFile = null;
+
+      let nodeBundleDir = "";
 
       const RING_R = 18;
       const RING_CIRC = 2 * Math.PI * RING_R;
@@ -1233,6 +1255,20 @@
           return;
         }
 
+        async function refreshNodeBundleDir() {
+          try {
+            const d = await tauri.invoke("node_bundle_get_dir", {});
+            nodeBundleDir = String(d || "");
+          } catch (_) {
+            nodeBundleDir = "";
+          }
+
+          if (nodeBundleDirOutEl) nodeBundleDirOutEl.textContent = nodeBundleDir || "—";
+          if (nodeBundleOpenBtnEl) nodeBundleOpenBtnEl.disabled = !nodeBundleDir;
+          if (nodeBundleOpenBtnEl) nodeBundleOpenBtnEl.style.opacity = nodeBundleDir ? "1" : "0.6";
+          if (nodeBundleOpenBtnEl) nodeBundleOpenBtnEl.style.cursor = nodeBundleDir ? "pointer" : "not-allowed";
+        }
+
         modalCloseEl.addEventListener("click", closeModal);
         modalOverlayEl.addEventListener("click", (e) => {
           if (e.target === modalOverlayEl) closeModal();
@@ -1244,6 +1280,54 @@
         clearSessionBtnEl.addEventListener("click", () => {
           clearSession();
         });
+
+        if (nodeBundleImportBtnEl) {
+          nodeBundleImportBtnEl.addEventListener("click", async () => {
+            setError("");
+            try {
+              const picked = await dialogApi.open({ directory: true, multiple: false });
+              if (!picked) return;
+              await tauri.invoke("node_bundle_set_dir", { dir: String(picked) });
+              await refreshNodeBundleDir();
+              showModal({ title: "Imported", body: `Node tools folder set to:\n${nodeBundleDir}`, actions: [{ label: "OK", primary: true }] });
+            } catch (e) {
+              setError(String(e));
+              showModal({ title: "Import failed", body: String(e), actions: [{ label: "Close", primary: true }] });
+            }
+          });
+        }
+
+        if (nodeBundleOpenBtnEl) {
+          nodeBundleOpenBtnEl.addEventListener("click", async () => {
+            setError("");
+            try {
+              if (!nodeBundleDir) return;
+              await tauri.invoke("open_file", { path: nodeBundleDir });
+            } catch (e) {
+              setError(String(e));
+            }
+          });
+        }
+
+        if (nodeBundleClearBtnEl) {
+          nodeBundleClearBtnEl.addEventListener("click", async () => {
+            showModal({
+              title: "Clear imported folder?",
+              body: "This will remove the saved node tools folder path from this device.",
+              actions: [
+                {
+                  label: "Clear",
+                  primary: true,
+                  onClick: async () => {
+                    await tauri.invoke("node_bundle_set_dir", { dir: null });
+                    await refreshNodeBundleDir();
+                  },
+                },
+                { label: "Cancel" },
+              ],
+            });
+          });
+        }
 
         function setWalletTab(name) {
           const isOverview = name === "overview";
@@ -1292,6 +1376,8 @@
 
         setActivePage("transfer");
         setActiveTransferTab("send");
+
+        await refreshNodeBundleDir();
 
         function setStudioTab(name) {
           const isAudio = name === "audio";
@@ -1416,6 +1502,76 @@
           });
         }
 
+        if (studioAudioExportMp3El) {
+          studioAudioExportMp3El.addEventListener("click", async () => {
+            setError("");
+            try {
+              if (!studioAudioBlob) {
+                showModal({ title: "Nothing to export", body: "Record audio first.", actions: [{ label: "OK", primary: true }] });
+                return;
+              }
+              const ts = new Date().toISOString().replace(/[:.]/g, "-");
+              const extIn = (studioAudioBlob.type || "").includes("ogg") ? "ogg" : "webm";
+              const inName = `kat_audio_${ts}.${extIn}`;
+              if (!studioAudioFilePath) {
+                studioAudioFilePath = await ensureStudioTempFilePath(studioAudioBlob, inName);
+              }
+              const outPath = await dialogApi.save({
+                defaultPath: `kat_audio_${ts}.mp3`,
+                filters: [{ name: "MP3", extensions: ["mp3"] }],
+              });
+              if (!outPath) return;
+              if (studioAudioStatusEl) studioAudioStatusEl.textContent = "Exporting…";
+              await tauri.invoke("ffmpeg_transcode", {
+                inputPath: studioAudioFilePath,
+                outputPath: String(outPath),
+                kind: "mp3",
+              });
+              if (studioAudioStatusEl) studioAudioStatusEl.textContent = "Ready";
+              showModal({ title: "Export complete", body: `Saved to:\n${String(outPath)}`, actions: [{ label: "OK", primary: true }] });
+            } catch (e) {
+              if (studioAudioStatusEl) studioAudioStatusEl.textContent = "Ready";
+              setError(String(e));
+              showModal({ title: "Export failed", body: String(e), actions: [{ label: "Close", primary: true }] });
+            }
+          });
+        }
+
+        if (studioAudioExportWavEl) {
+          studioAudioExportWavEl.addEventListener("click", async () => {
+            setError("");
+            try {
+              if (!studioAudioBlob) {
+                showModal({ title: "Nothing to export", body: "Record audio first.", actions: [{ label: "OK", primary: true }] });
+                return;
+              }
+              const ts = new Date().toISOString().replace(/[:.]/g, "-");
+              const extIn = (studioAudioBlob.type || "").includes("ogg") ? "ogg" : "webm";
+              const inName = `kat_audio_${ts}.${extIn}`;
+              if (!studioAudioFilePath) {
+                studioAudioFilePath = await ensureStudioTempFilePath(studioAudioBlob, inName);
+              }
+              const outPath = await dialogApi.save({
+                defaultPath: `kat_audio_${ts}.wav`,
+                filters: [{ name: "WAV", extensions: ["wav"] }],
+              });
+              if (!outPath) return;
+              if (studioAudioStatusEl) studioAudioStatusEl.textContent = "Exporting…";
+              await tauri.invoke("ffmpeg_transcode", {
+                inputPath: studioAudioFilePath,
+                outputPath: String(outPath),
+                kind: "wav",
+              });
+              if (studioAudioStatusEl) studioAudioStatusEl.textContent = "Ready";
+              showModal({ title: "Export complete", body: `Saved to:\n${String(outPath)}`, actions: [{ label: "OK", primary: true }] });
+            } catch (e) {
+              if (studioAudioStatusEl) studioAudioStatusEl.textContent = "Ready";
+              setError(String(e));
+              showModal({ title: "Export failed", body: String(e), actions: [{ label: "Close", primary: true }] });
+            }
+          });
+        }
+
         async function saveBlobToFile(blob, suggestedName, filters) {
           if (!dialogApi?.save || !fsApi?.writeBinaryFile) {
             throw new Error("Save is not available (missing dialog/fs API)");
@@ -1429,6 +1585,22 @@
           const bytes = new Uint8Array(buf);
           await fsApi.writeBinaryFile({ path, contents: bytes });
           return String(path);
+        }
+
+        async function writeBlobToPath(blob, path) {
+          if (!fsApi?.writeBinaryFile) {
+            throw new Error("File write is not available (missing fs API)");
+          }
+          const buf = await blob.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          await fsApi.writeBinaryFile({ path, contents: bytes });
+        }
+
+        async function ensureStudioTempFilePath(blob, fileName) {
+          if (!blob) throw new Error("missing blob");
+          const tmpPath = await tauri.invoke("studio_temp_path", { fileName });
+          await writeBlobToPath(blob, String(tmpPath));
+          return String(tmpPath);
         }
 
         async function listMediaDevices() {
@@ -1482,10 +1654,12 @@
         let studioAudioBlob = null;
         let studioAudioMime = "";
         let studioAudioStream = null;
+        let studioAudioFilePath = "";
 
         function clearStudioAudioTake() {
           studioAudioBlob = null;
           studioAudioChunks = [];
+          studioAudioFilePath = "";
           if (studioAudioPlaybackEl) {
             try {
               if (studioAudioPlaybackEl.src) URL.revokeObjectURL(studioAudioPlaybackEl.src);
@@ -1528,12 +1702,25 @@
               studioAudioPlaybackEl.src = URL.createObjectURL(studioAudioBlob);
               studioAudioPlaybackEl.style.display = "block";
             }
-            if (studioAudioMetaEl) {
-              const kb = Math.round(studioAudioBlob.size / 1024);
-              studioAudioMetaEl.textContent = `Recorded: ${kb} KB (${studioAudioBlob.type || "audio"})`;
-              studioAudioMetaEl.style.display = "block";
-            }
-            if (studioAudioStatusEl) studioAudioStatusEl.textContent = "Ready";
+
+            if (studioAudioStatusEl) studioAudioStatusEl.textContent = "Processing…";
+            (async () => {
+              try {
+                const ts = new Date().toISOString().replace(/[:.]/g, "-");
+                const ext = (studioAudioBlob.type || "").includes("ogg") ? "ogg" : "webm";
+                const fileName = `kat_audio_${ts}.${ext}`;
+                studioAudioFilePath = await ensureStudioTempFilePath(studioAudioBlob, fileName);
+                if (studioAudioMetaEl) {
+                  const kb = Math.round(studioAudioBlob.size / 1024);
+                  studioAudioMetaEl.textContent = `Recorded: ${kb} KB (${studioAudioBlob.type || "audio"})`;
+                  studioAudioMetaEl.style.display = "block";
+                }
+                if (studioAudioStatusEl) studioAudioStatusEl.textContent = "Ready";
+              } catch (_) {
+                if (studioAudioStatusEl) studioAudioStatusEl.textContent = "Ready";
+              }
+            })();
+
             if (studioAudioStream) {
               studioAudioStream.getTracks().forEach((t) => t.stop());
               studioAudioStream = null;
@@ -1554,10 +1741,12 @@
         let studioVideoBlob = null;
         let studioVideoMime = "";
         let studioVideoStream = null;
+        let studioVideoFilePath = "";
 
         function clearStudioVideoTake() {
           studioVideoBlob = null;
           studioVideoChunks = [];
+          studioVideoFilePath = "";
           if (studioVideoPlaybackEl) {
             try {
               if (studioVideoPlaybackEl.src) URL.revokeObjectURL(studioVideoPlaybackEl.src);
@@ -1634,12 +1823,24 @@
               studioVideoLiveEl.srcObject = null;
               studioVideoLiveEl.style.display = "none";
             }
-            if (studioVideoMetaEl) {
-              const mb = (studioVideoBlob.size / (1024 * 1024)).toFixed(2);
-              studioVideoMetaEl.textContent = `Recorded: ${mb} MB (${studioVideoBlob.type || "video"})`;
-              studioVideoMetaEl.style.display = "block";
-            }
-            if (studioVideoStatusEl) studioVideoStatusEl.textContent = "Ready";
+
+            if (studioVideoStatusEl) studioVideoStatusEl.textContent = "Processing…";
+            (async () => {
+              try {
+                const ts = new Date().toISOString().replace(/[:.]/g, "-");
+                const fileName = `kat_video_${ts}.webm`;
+                studioVideoFilePath = await ensureStudioTempFilePath(studioVideoBlob, fileName);
+                if (studioVideoMetaEl) {
+                  const mb = (studioVideoBlob.size / (1024 * 1024)).toFixed(2);
+                  studioVideoMetaEl.textContent = `Recorded: ${mb} MB (${studioVideoBlob.type || "video"})`;
+                  studioVideoMetaEl.style.display = "block";
+                }
+                if (studioVideoStatusEl) studioVideoStatusEl.textContent = "Ready";
+              } catch (_) {
+                if (studioVideoStatusEl) studioVideoStatusEl.textContent = "Ready";
+              }
+            })();
+
             if (studioVideoStream) {
               studioVideoStream.getTracks().forEach((t) => t.stop());
               studioVideoStream = null;
@@ -1759,11 +1960,13 @@
                       const ts = new Date().toISOString().replace(/[:.]/g, "-");
                       const ext = (studioAudioBlob.type || "").includes("ogg") ? "ogg" : "webm";
                       const fileName = `kat_audio_${ts}.${ext}`;
-                      const fileB64 = await readBlobDataUrl(studioAudioBlob);
-                      const txid = await tauri.invoke("wallet_send_file_b64", {
+                      if (!studioAudioFilePath) {
+                        studioAudioFilePath = await ensureStudioTempFilePath(studioAudioBlob, fileName);
+                      }
+                      const txid = await tauri.invoke("wallet_send_file_path", {
                         window: null,
                         accountId: null,
-                        fileB64,
+                        filePath: studioAudioFilePath,
                         toAddress,
                         amountKas,
                         rpcUrl,
@@ -1899,11 +2102,13 @@
                       if (studioVideoStatusEl) studioVideoStatusEl.textContent = "Sending…";
                       const ts = new Date().toISOString().replace(/[:.]/g, "-");
                       const fileName = `kat_video_${ts}.webm`;
-                      const fileB64 = await readBlobDataUrl(studioVideoBlob);
-                      const txid = await tauri.invoke("wallet_send_file_b64", {
+                      if (!studioVideoFilePath) {
+                        studioVideoFilePath = await ensureStudioTempFilePath(studioVideoBlob, fileName);
+                      }
+                      const txid = await tauri.invoke("wallet_send_file_path", {
                         window: null,
                         accountId: null,
-                        fileB64,
+                        filePath: studioVideoFilePath,
                         toAddress,
                         amountKas,
                         rpcUrl,
@@ -1933,6 +2138,40 @@
               if (studioVideoStatusEl) studioVideoStatusEl.textContent = "Failed";
               setError(String(e));
               showModal({ title: "Send failed", body: String(e), actions: [{ label: "Close", primary: true }] });
+            }
+          });
+        }
+
+        if (studioVideoExportMp4El) {
+          studioVideoExportMp4El.addEventListener("click", async () => {
+            setError("");
+            try {
+              if (!studioVideoBlob) {
+                showModal({ title: "Nothing to export", body: "Record video first.", actions: [{ label: "OK", primary: true }] });
+                return;
+              }
+              const ts = new Date().toISOString().replace(/[:.]/g, "-");
+              const inName = `kat_video_${ts}.webm`;
+              if (!studioVideoFilePath) {
+                studioVideoFilePath = await ensureStudioTempFilePath(studioVideoBlob, inName);
+              }
+              const outPath = await dialogApi.save({
+                defaultPath: `kat_video_${ts}.mp4`,
+                filters: [{ name: "MP4", extensions: ["mp4"] }],
+              });
+              if (!outPath) return;
+              if (studioVideoStatusEl) studioVideoStatusEl.textContent = "Exporting…";
+              await tauri.invoke("ffmpeg_transcode", {
+                inputPath: studioVideoFilePath,
+                outputPath: String(outPath),
+                kind: "mp4",
+              });
+              if (studioVideoStatusEl) studioVideoStatusEl.textContent = "Ready";
+              showModal({ title: "Export complete", body: `Saved to:\n${String(outPath)}`, actions: [{ label: "OK", primary: true }] });
+            } catch (e) {
+              if (studioVideoStatusEl) studioVideoStatusEl.textContent = "Ready";
+              setError(String(e));
+              showModal({ title: "Export failed", body: String(e), actions: [{ label: "Close", primary: true }] });
             }
           });
         }
