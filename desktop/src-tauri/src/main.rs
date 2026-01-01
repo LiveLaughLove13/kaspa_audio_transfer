@@ -751,12 +751,14 @@ fn decode_b64_payload(payload: &str) -> Result<Vec<u8>, String> {
         return Err("file_b64 is empty".to_string());
     }
 
-    let b64 = if let Some((_, rest)) = trimmed.split_once(",") {
-        // Handle data URLs: data:...;base64,XXXX
-        if trimmed.to_ascii_lowercase().contains("base64") {
-            rest
+    // Handle data URLs: data:...;base64,XXXX
+    // Note: media types may include commas (e.g. codecs=vp9,opus), so we must not split on the first comma.
+    let b64 = if trimmed.len() >= 5 && trimmed[..5].eq_ignore_ascii_case("data:") {
+        let lower = trimmed.to_ascii_lowercase();
+        if let Some(i) = lower.find("base64,") {
+            &trimmed[i + "base64,".len()..]
         } else {
-            trimmed
+            return Err("data URL is not base64 encoded".to_string());
         }
     } else {
         trimmed
@@ -807,6 +809,21 @@ fn studio_temp_path(file_name: String) -> Result<String, String> {
     dir.push("studio");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let p = dir.join(safe);
+    Ok(p.to_string_lossy().to_string())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn studio_write_temp_file_b64(file_name: String, file_b64: String) -> Result<String, String> {
+    let safe = sanitize_filename(&file_name);
+    let bytes = decode_b64_payload(&file_b64)?;
+
+    let mut dir = std::env::temp_dir();
+    dir.push("KaspaAudioTransfer");
+    dir.push("studio");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+
+    let p = dir.join(safe);
+    std::fs::write(&p, &bytes).map_err(|e| format!("failed to write studio temp file: {e}"))?;
     Ok(p.to_string_lossy().to_string())
 }
 
@@ -1190,6 +1207,7 @@ fn main() {
             wallet_send_file_path,
             wallet_receive_file,
             studio_temp_path,
+            studio_write_temp_file_b64,
             ffmpeg_transcode,
             open_file,
             reveal_in_folder

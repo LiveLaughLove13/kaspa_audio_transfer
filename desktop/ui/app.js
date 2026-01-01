@@ -909,8 +909,8 @@
 
         async function ensureStudioTempFilePath(blob, fileName) {
           if (!blob) throw new Error("missing blob");
-          const tmpPath = await tauri.invoke("studio_temp_path", { fileName });
-          await writeBlobToPath(blob, String(tmpPath));
+          const fileB64 = await readBlobDataUrl(blob);
+          const tmpPath = await tauri.invoke("studio_write_temp_file_b64", { fileName, fileB64 });
           return String(tmpPath);
         }
 
@@ -1213,6 +1213,7 @@
             studioVideoLiveEl.srcObject = null;
             studioVideoLiveEl.style.display = "none";
           }
+
           if (studioVideoStatusEl && studioVideoStatusEl.textContent === "Recording…") {
             studioVideoStatusEl.textContent = "Idle";
           }
@@ -1222,8 +1223,30 @@
           studioAudioStartEl.addEventListener("click", async () => {
             setError("");
             try {
-              await refreshStudioDevices();
-              await startStudioAudio();
+              if (studioAudioRecorder && studioAudioRecorder.state !== "inactive") {
+                showModal({
+                  title: "Already recording",
+                  body: "Audio recording is already in progress.",
+                  actions: [{ label: "OK", primary: true }],
+                });
+                return;
+              }
+
+              showModal({
+                title: "Ready to record audio?",
+                body: "Click Start to begin recording. You can stop anytime.",
+                actions: [
+                  {
+                    label: "Start",
+                    primary: true,
+                    onClick: async () => {
+                      await refreshStudioDevices();
+                      await startStudioAudio();
+                    },
+                  },
+                  { label: "Cancel" },
+                ],
+              });
             } catch (e) {
               setError(String(e));
               showModal({ title: "Audio recording error", body: String(e), actions: [{ label: "Close", primary: true }] });
@@ -1271,9 +1294,7 @@
               }
               const ext = (studioAudioBlob.type || "").includes("ogg") ? "ogg" : "webm";
               const ts = new Date().toISOString().replace(/[:.]/g, "-");
-              const out = await saveBlobToFile(studioAudioBlob, `kat_audio_${ts}.${ext}`, [
-                { name: ext.toUpperCase(), extensions: [ext] },
-              ]);
+              const out = await saveBlobToFile(studioAudioBlob, `kat_audio_${ts}.${ext}`, [{ name: ext.toUpperCase(), extensions: [ext] }]);
               if (out) {
                 showModal({ title: "Saved", body: `Saved to:\n${out}`, actions: [{ label: "OK", primary: true }] });
               }
@@ -1300,6 +1321,7 @@
               const amountKas = Number(studioAudioAmountEl?.value || "0");
               const rpcUrl = studioAudioRpcEl?.value.trim() || "";
               const fromPrivateKey = isWalletSessionUnlocked ? "" : (studioAudioPrivEl?.value.trim() || "");
+
               if (!toAddress) {
                 setError("Enter to address.");
                 return;
@@ -1326,13 +1348,11 @@
                       const ts = new Date().toISOString().replace(/[:.]/g, "-");
                       const ext = (studioAudioBlob.type || "").includes("ogg") ? "ogg" : "webm";
                       const fileName = `kat_audio_${ts}.${ext}`;
-                      if (!studioAudioFilePath) {
-                        studioAudioFilePath = await ensureStudioTempFilePath(studioAudioBlob, fileName);
-                      }
-                      const txid = await tauri.invoke("wallet_send_file_path", {
+                      const fileB64 = await readBlobDataUrl(studioAudioBlob);
+                      const txid = await tauri.invoke("wallet_send_file_b64", {
                         window: null,
                         accountId: null,
-                        filePath: studioAudioFilePath,
+                        fileB64,
                         toAddress,
                         amountKas,
                         rpcUrl,
@@ -1341,6 +1361,12 @@
                         fileName,
                         fromPrivateKey,
                       });
+                      try {
+                        sendTxidEl.textContent = String(txid);
+                        recvTxEl.value = String(txid);
+                        sendProgressEl.textContent = "Done";
+                        setRing(sendRingEl, 1);
+                      } catch (_) {}
                       if (studioAudioStatusEl) studioAudioStatusEl.textContent = "Sent";
                       showModal({
                         title: "Send complete",
@@ -1370,8 +1396,32 @@
           studioVideoStartEl.addEventListener("click", async () => {
             setError("");
             try {
-              await refreshStudioDevices();
-              await startStudioVideo();
+              if (studioVideoRecorder && studioVideoRecorder.state !== "inactive") {
+                showModal({
+                  title: "Already recording",
+                  body: "Video recording is already in progress.",
+                  actions: [{ label: "OK", primary: true }],
+                });
+                return;
+              }
+
+              const source = studioVideoSourceEl?.value || "camera";
+              const sourceLabel = source === "screen" ? "Screen" : "Camera";
+              showModal({
+                title: "Ready to record video?",
+                body: `Source: ${sourceLabel}\n\nClick Start to begin recording. You can stop anytime.`,
+                actions: [
+                  {
+                    label: "Start",
+                    primary: true,
+                    onClick: async () => {
+                      await refreshStudioDevices();
+                      await startStudioVideo();
+                    },
+                  },
+                  { label: "Cancel" },
+                ],
+              });
             } catch (e) {
               setError(String(e));
               showModal({ title: "Video recording error", body: String(e), actions: [{ label: "Close", primary: true }] });
@@ -1470,13 +1520,11 @@
                       if (studioVideoStatusEl) studioVideoStatusEl.textContent = "Sending…";
                       const ts = new Date().toISOString().replace(/[:.]/g, "-");
                       const fileName = `kat_video_${ts}.webm`;
-                      if (!studioVideoFilePath) {
-                        studioVideoFilePath = await ensureStudioTempFilePath(studioVideoBlob, fileName);
-                      }
-                      const txid = await tauri.invoke("wallet_send_file_path", {
+                      const fileB64 = await readBlobDataUrl(studioVideoBlob);
+                      const txid = await tauri.invoke("wallet_send_file_b64", {
                         window: null,
                         accountId: null,
-                        filePath: studioVideoFilePath,
+                        fileB64,
                         toAddress,
                         amountKas,
                         rpcUrl,
@@ -1485,6 +1533,12 @@
                         fileName,
                         fromPrivateKey,
                       });
+                      try {
+                        sendTxidEl.textContent = String(txid);
+                        recvTxEl.value = String(txid);
+                        sendProgressEl.textContent = "Done";
+                        setRing(sendRingEl, 1);
+                      } catch (_) {}
                       if (studioVideoStatusEl) studioVideoStatusEl.textContent = "Sent";
                       showModal({
                         title: "Send complete",
