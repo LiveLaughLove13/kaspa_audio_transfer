@@ -334,10 +334,25 @@
         errorEl.textContent = msg;
       }
 
+      window.addEventListener("error", (e) => {
+        try {
+          const err = e && e.error;
+          const msg = err ? String(err.stack || err.message || err) : String((e && e.message) || e);
+          setError(msg);
+        } catch (_) {}
+      });
+
+      window.addEventListener("unhandledrejection", (e) => {
+        try {
+          setError(String((e && e.reason) || e));
+        } catch (_) {}
+      });
+
       async function readFileB64(file) {
         return new Promise((resolve, reject) => {
           const r = new FileReader();
           r.onerror = () => reject(new Error("failed reading file"));
+
           r.onload = () => resolve(String(r.result || ""));
           r.readAsDataURL(file);
         });
@@ -547,17 +562,21 @@
           getKnsNetwork: () => knsNetworkFromRpcUrl(studioVideoRpcEl?.value || ""),
         });
 
-        modalCloseEl.addEventListener("click", closeModal);
-        modalOverlayEl.addEventListener("click", (e) => {
-          if (e.target === modalOverlayEl) closeModal();
-        });
+        if (modalCloseEl) modalCloseEl.addEventListener("click", closeModal);
+        if (modalOverlayEl) {
+          modalOverlayEl.addEventListener("click", (e) => {
+            if (e.target === modalOverlayEl) closeModal();
+          });
+        }
         window.addEventListener("keydown", (e) => {
           if (e.key === "Escape") closeModal();
         });
 
-        clearSessionBtnEl.addEventListener("click", () => {
-          clearSession();
-        });
+        if (clearSessionBtnEl) {
+          clearSessionBtnEl.addEventListener("click", () => {
+            clearSession();
+          });
+        }
 
         if (nodeBundleImportBtnEl) {
           nodeBundleImportBtnEl.addEventListener("click", async () => {
