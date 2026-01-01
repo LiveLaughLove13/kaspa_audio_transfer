@@ -9,13 +9,28 @@
       :root {
         --kaspa-primary: #70c7ba;
         --kaspa-accent: #49eacb;
-        --bg-start: #0f1319;
-        --bg-mid: #141c26;
-        --surface: rgba(15, 21, 30, 0.72);
-        --border: rgba(112, 199, 186, 0.22);
-        --text: #e8f4f0;
-        --text-muted: #9fbac3;
-        --shadow: 0 24px 60px rgba(5, 12, 20, 0.45);
+        --kaspa-glow: rgba(73, 234, 203, 0.32);
+
+        --bg-0: #070a10;
+        --bg-1: #0b1019;
+        --bg-2: #0f1823;
+
+        --surface-0: rgba(12, 16, 24, 0.40);
+        --surface-1: rgba(12, 16, 24, 0.56);
+        --surface-2: rgba(15, 21, 30, 0.74);
+
+        --border: rgba(148, 236, 220, 0.18);
+        --border-strong: rgba(148, 236, 220, 0.28);
+
+        --text: rgba(232, 244, 240, 0.96);
+        --text-muted: rgba(170, 198, 210, 0.88);
+
+        --shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+        --shadow-soft: 0 18px 40px rgba(0, 0, 0, 0.35);
+
+        --radius-xl: 22px;
+        --radius-lg: 18px;
+        --radius-md: 14px;
       }
 
       * { box-sizing: border-box; }
@@ -23,15 +38,37 @@
       body {
         margin: 0;
         font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        background: linear-gradient(135deg, var(--bg-start) 0%, var(--bg-mid) 100%);
+        background:
+          radial-gradient(1200px 700px at 15% 10%, rgba(73, 234, 203, 0.14) 0%, rgba(73, 234, 203, 0) 55%),
+          radial-gradient(900px 600px at 82% 18%, rgba(112, 199, 186, 0.12) 0%, rgba(112, 199, 186, 0) 60%),
+          radial-gradient(900px 650px at 55% 92%, rgba(52, 116, 255, 0.10) 0%, rgba(52, 116, 255, 0) 60%),
+          linear-gradient(135deg, var(--bg-0) 0%, var(--bg-1) 40%, var(--bg-2) 100%);
         color: var(--text);
         overflow: hidden;
+        letter-spacing: 0.01em;
       }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: -2px;
+        pointer-events: none;
+        background:
+          radial-gradient(500px 320px at 20% 30%, rgba(73, 234, 203, 0.10) 0%, rgba(73, 234, 203, 0) 65%),
+          radial-gradient(420px 300px at 80% 60%, rgba(112, 199, 186, 0.08) 0%, rgba(112, 199, 186, 0) 68%);
+        filter: blur(18px);
+        opacity: 0.9;
+      }
+
+      ::-webkit-scrollbar { width: 10px; height: 10px; }
+      ::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); border-radius: 999px; }
+      ::-webkit-scrollbar-thumb { background: rgba(148, 236, 220, 0.18); border-radius: 999px; border: 2px solid rgba(0,0,0,0); background-clip: padding-box; }
+      ::-webkit-scrollbar-thumb:hover { background: rgba(148, 236, 220, 0.26); border: 2px solid rgba(0,0,0,0); background-clip: padding-box; }
 
       .panel {
         width: 100vw;
         height: 100vh;
-        background: rgba(15, 21, 30, 0.52);
+        background: rgba(12, 16, 24, 0.40);
         border: 0;
         border-radius: 0;
         box-shadow: none;
@@ -41,10 +78,10 @@
       }
 
       .sidebar {
-        border-right: 1px solid rgba(112, 199, 186, 0.14);
+        border-right: 1px solid rgba(148, 236, 220, 0.12);
         padding: 14px 12px;
-        background: rgba(10, 14, 20, 0.35);
-        backdrop-filter: blur(12px);
+        background: linear-gradient(180deg, rgba(10, 14, 20, 0.65) 0%, rgba(10, 14, 20, 0.35) 100%);
+        backdrop-filter: blur(18px);
         display: flex;
         flex-direction: column;
         gap: 12px;
@@ -63,9 +100,9 @@
         align-items: center;
         justify-content: space-between;
         gap: 14px;
-        border-bottom: 1px solid rgba(112, 199, 186, 0.14);
-        background: rgba(15, 21, 30, 0.35);
-        backdrop-filter: blur(12px);
+        border-bottom: 1px solid rgba(148, 236, 220, 0.12);
+        background: linear-gradient(180deg, rgba(12, 16, 24, 0.62) 0%, rgba(12, 16, 24, 0.34) 100%);
+        backdrop-filter: blur(18px);
       }
 
       .topbarLeft {
@@ -77,8 +114,9 @@
 
       .pageTitle {
         font-size: 14px;
-        font-weight: 900;
-        letter-spacing: 0.02em;
+        font-weight: 950;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
         color: var(--text);
       }
 
@@ -91,32 +129,61 @@
         width: 100%;
         cursor: pointer;
         padding: 10px 10px;
-        border-radius: 12px;
-        border: 1px solid rgba(112, 199, 186, 0.14);
-        background: rgba(15, 21, 30, 0.35);
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(148, 236, 220, 0.12);
+        background: rgba(12, 16, 24, 0.46);
         color: var(--text);
         font-weight: 850;
         text-align: left;
-        transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+        box-shadow: 0 0 0 rgba(0,0,0,0);
+        transition: transform 160ms ease, background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .navBtn::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(500px 120px at 10% 40%, rgba(73, 234, 203, 0.10) 0%, rgba(73, 234, 203, 0) 55%);
+        opacity: 0;
+        transition: opacity 160ms ease;
+        pointer-events: none;
       }
 
       .navBtn:hover {
         transform: translateY(-1px);
-        border-color: rgba(112, 199, 186, 0.32);
-        background: rgba(15, 21, 30, 0.55);
+        border-color: rgba(148, 236, 220, 0.26);
+        background: rgba(12, 16, 24, 0.62);
+        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.22);
       }
+
+      .navBtn:hover::after { opacity: 1; }
 
       .navBtnActive {
         border-color: rgba(73, 234, 203, 0.45);
-        background: rgba(73, 234, 203, 0.10);
+        background: linear-gradient(180deg, rgba(73, 234, 203, 0.12) 0%, rgba(12, 16, 24, 0.46) 100%);
+        box-shadow: 0 18px 45px rgba(73, 234, 203, 0.10);
       }
 
       .card {
-        border: 1px solid rgba(112, 199, 186, 0.18);
-        border-radius: 16px;
+        border: 1px solid rgba(148, 236, 220, 0.14);
+        border-radius: var(--radius-xl);
         padding: 14px;
-        background: rgba(15, 21, 30, 0.45);
-        box-shadow: 0 18px 38px rgba(5, 12, 20, 0.28);
+        background: linear-gradient(180deg, rgba(12, 16, 24, 0.66) 0%, rgba(12, 16, 24, 0.44) 100%);
+        box-shadow: var(--shadow-soft);
+        backdrop-filter: blur(18px);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 22%);
+        opacity: 0.6;
       }
 
       .pages {
@@ -141,9 +208,10 @@
         display: inline-flex;
         gap: 6px;
         padding: 6px;
-        border-radius: 14px;
-        border: 1px solid rgba(112, 199, 186, 0.14);
-        background: rgba(15, 21, 30, 0.35);
+        border-radius: var(--radius-lg);
+        border: 1px solid rgba(148, 236, 220, 0.12);
+        background: rgba(12, 16, 24, 0.46);
+        backdrop-filter: blur(14px);
       }
 
       .tabBtn {
@@ -154,7 +222,7 @@
         background: transparent;
         color: var(--text-muted);
         font-weight: 850;
-        transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+        transition: background 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
       }
 
       .tabBtn:hover {
@@ -166,15 +234,47 @@
         background: rgba(73, 234, 203, 0.12);
         color: var(--text);
         border-color: rgba(73, 234, 203, 0.25);
+        box-shadow: 0 14px 30px rgba(73, 234, 203, 0.08);
       }
 
       input, select, textarea, button {
         outline: none;
       }
 
+      input, select, textarea {
+        transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+        caret-color: var(--kaspa-accent);
+      }
+
+      input::placeholder, textarea::placeholder {
+        color: rgba(170, 198, 210, 0.60);
+      }
+
+      button {
+        transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+        box-shadow: 0 0 0 rgba(0,0,0,0);
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.20);
+      }
+
+      button:active {
+        transform: translateY(0) scale(0.98);
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+      }
+
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+
       input:focus, select:focus, textarea:focus {
-        box-shadow: 0 0 0 3px rgba(73, 234, 203, 0.14);
-        border-color: rgba(73, 234, 203, 0.35) !important;
+        box-shadow: 0 0 0 4px rgba(73, 234, 203, 0.12);
+        border-color: rgba(73, 234, 203, 0.38) !important;
       }
 
       .title {
@@ -198,7 +298,7 @@
         height: 34px;
         border-radius: 10px;
         background: linear-gradient(135deg, var(--kaspa-accent) 0%, var(--kaspa-primary) 100%);
-        box-shadow: 0 16px 30px rgba(73, 234, 203, 0.28);
+        box-shadow: 0 18px 38px rgba(73, 234, 203, 0.24);
         display: grid;
         place-items: center;
         color: #03181a;
@@ -223,8 +323,8 @@
         font-size: 12px;
         padding: 8px 10px;
         border-radius: 999px;
-        border: 1px solid var(--border);
-        background: rgba(15, 21, 30, 0.55);
+        border: 1px solid rgba(148, 236, 220, 0.14);
+        background: rgba(12, 16, 24, 0.55);
         color: var(--text-muted);
       }
 
@@ -241,7 +341,7 @@
 
       .error {
         margin-top: 12px;
-        color: #ffb4b4;
+        color: rgba(255, 190, 190, 0.95);
         display: none;
       }
 
@@ -320,11 +420,12 @@
 
       .modal {
         width: min(560px, 96vw);
-        border-radius: 16px;
-        background: rgba(15, 21, 30, 0.92);
-        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background: linear-gradient(180deg, rgba(12, 16, 24, 0.92) 0%, rgba(12, 16, 24, 0.76) 100%);
+        border: 1px solid rgba(148, 236, 220, 0.16);
         box-shadow: var(--shadow);
         padding: 18px;
+        backdrop-filter: blur(20px);
       }
 
       .modalHeader {
@@ -341,12 +442,19 @@
 
       .modalClose {
         cursor: pointer;
-        border: 1px solid var(--border);
-        background: rgba(15, 21, 30, 0.55);
+        border: 1px solid rgba(148, 236, 220, 0.16);
+        background: rgba(12, 16, 24, 0.55);
         color: var(--text);
         border-radius: 10px;
         padding: 6px 10px;
         font-weight: 800;
+        transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+      }
+
+      .modalClose:hover {
+        transform: translateY(-1px);
+        border-color: rgba(148, 236, 220, 0.26);
+        background: rgba(12, 16, 24, 0.70);
       }
 
       .modalBody {
@@ -369,10 +477,17 @@
         cursor: pointer;
         padding: 8px 10px;
         border-radius: 10px;
-        border: 1px solid var(--border);
-        background: rgba(15, 21, 30, 0.55);
+        border: 1px solid rgba(148, 236, 220, 0.16);
+        background: rgba(12, 16, 24, 0.55);
         color: var(--text);
         font-weight: 800;
+        transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+      }
+
+      .modalBtn:hover {
+        transform: translateY(-1px);
+        border-color: rgba(148, 236, 220, 0.26);
+        background: rgba(12, 16, 24, 0.70);
       }
 
       .modalBtnPrimary {
@@ -380,12 +495,16 @@
         color: #03181a;
       }
 
+      .modalBtnPrimary:hover {
+        box-shadow: 0 18px 45px rgba(73, 234, 203, 0.16);
+      }
+
       .copyBtn {
         cursor: pointer;
         padding: 6px 10px;
         border-radius: 999px;
-        border: 1px solid rgba(112, 199, 186, 0.18);
-        background: rgba(15, 21, 30, 0.55);
+        border: 1px solid rgba(148, 236, 220, 0.16);
+        background: rgba(12, 16, 24, 0.55);
         color: var(--text);
         font-weight: 850;
         font-size: 12px;
@@ -395,15 +514,15 @@
 
       .copyBtn:hover {
         transform: translateY(-1px);
-        border-color: rgba(112, 199, 186, 0.32);
-        background: rgba(15, 21, 30, 0.68);
+        border-color: rgba(148, 236, 220, 0.26);
+        background: rgba(12, 16, 24, 0.70);
       }
 
       .dropZone {
-        border: 1px dashed rgba(112, 199, 186, 0.35);
-        border-radius: 12px;
+        border: 1px dashed rgba(148, 236, 220, 0.28);
+        border-radius: var(--radius-lg);
         padding: 12px;
-        background: rgba(15, 21, 30, 0.35);
+        background: rgba(12, 16, 24, 0.46);
         transition: border-color 120ms linear, background 120ms linear;
       }
 
