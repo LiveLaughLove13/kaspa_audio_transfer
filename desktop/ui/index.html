@@ -83,73 +83,104 @@
         </div>
 
         <div id="walletOverviewPanel" style="margin-top:14px;">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-            <div>
-              <div style="font-weight:750;margin-bottom:8px;">Active account</div>
-              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-                <label style="font-size:12px;color:var(--text-muted);">Network</label>
-                <select id="walletNetwork" style="padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);">
-                  <option value="mainnet">mainnet</option>
-                  <option value="testnet">testnet</option>
-                  <option value="devnet">devnet</option>
-                </select>
-                <label style="font-size:12px;color:var(--text-muted);">RPC</label>
-                <input id="walletRpcUrl" type="text" value="grpc://127.0.0.1:16110" spellcheck="false" style="flex:1;min-width:220px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
-              </div>
-
-              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
-                <label style="font-size:12px;color:var(--text-muted);">Base</label>
-                <input id="walletBasePath" type="text" value="m/44'/111111'/0'" spellcheck="false" style="flex:1;min-width:240px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
-              </div>
-
-              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
-                <label style="font-size:12px;color:var(--text-muted);">Chain</label>
-                <select id="walletChain" style="padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);">
-                  <option value="0">receive</option>
-                  <option value="1">change</option>
-                </select>
-                <label style="font-size:12px;color:var(--text-muted);">Index</label>
-                <input id="walletAddrIndex" type="number" value="0" min="0" step="1" style="width:110px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
-                <button id="walletDeriveBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Refresh address</button>
-              </div>
-
-              <div style="margin-top:10px;font-size:12px;color:var(--text-muted);word-break:break-all;">
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-                  <div style="min-width:0;flex:1;"><span style="opacity:0.85;">Path:</span> <span id="walletFullPath">—</span></div>
-                  <button id="walletCopyPathBtn" class="copyBtn" type="button">Copy</button>
+          <div class="walletGrid">
+            <div class="collapseCard card walletCardAccent">
+              <input id="walletBalanceCardToggle" class="collapseToggle" type="checkbox" checked />
+              <div class="collapseHeader">
+                <label class="collapseTitle" for="walletBalanceCardToggle">Balance</label>
+                <div class="collapseActions">
+                  <button id="walletBalanceRefreshBtn" style="cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.20);color:var(--text);font-weight:800;">Refresh</button>
+                  <label class="collapseChevron" for="walletBalanceCardToggle" aria-label="Toggle"></label>
                 </div>
-                <div style="margin-top:6px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-                  <div style="min-width:0;flex:1;"><span style="opacity:0.85;">Address:</span> <span id="walletDerivedAddress">—</span></div>
+              </div>
+              <div class="collapseBody">
+                <div style="margin-top:6px;font-size:28px;font-weight:950;letter-spacing:0.01em;">
+                  <span id="walletBalance">—</span>
+                </div>
+                <div style="margin-top:2px;font-size:14px;font-weight:900;opacity:0.95;">KAS</div>
+              </div>
+            </div>
+
+            <div class="collapseCard card">
+              <input id="walletAddressCardToggle" class="collapseToggle" type="checkbox" checked />
+              <div class="collapseHeader">
+                <label class="collapseTitle" for="walletAddressCardToggle">Address</label>
+                <div class="collapseActions">
                   <button id="walletCopyAddressBtn" class="copyBtn" type="button">Copy</button>
+                  <label class="collapseChevron" for="walletAddressCardToggle" aria-label="Toggle"></label>
+                </div>
+              </div>
+              <div class="collapseBody">
+                <div style="font-size:12px;color:var(--text-muted);word-break:break-all;">
+                  <div><span style="opacity:0.85;">Address:</span> <span id="walletDerivedAddress">—</span></div>
+                  <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                    <div style="min-width:0;flex:1;"><span style="opacity:0.85;">Path:</span> <span id="walletFullPath">—</span></div>
+                    <button id="walletCopyPathBtn" class="copyBtn" type="button">Copy</button>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div>
-              <div style="font-weight:750;margin-bottom:8px;">Balance & send</div>
+            <div class="collapseCard card">
+              <input id="walletSendCardToggle" class="collapseToggle" type="checkbox" checked />
+              <div class="collapseHeader">
+                <label class="collapseTitle" for="walletSendCardToggle">Send Funds</label>
+                <div class="collapseActions">
+                  <label class="collapseChevron" for="walletSendCardToggle" aria-label="Toggle"></label>
+                </div>
+              </div>
+              <div class="collapseBody">
+                <div style="margin-top:6px;display:flex;gap:10px;">
+                  <input id="walletSendTo" type="text" placeholder="To address" spellcheck="false" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                </div>
+                <div id="walletSendToResolved" class="knsPreview" style="display:none;"></div>
+                <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
+                  <input id="walletSendAmount" type="number" step="0.00000001" value="0" style="width:160px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                  <button id="walletSendKasBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:linear-gradient(135deg,var(--kaspa-accent) 0%,var(--kaspa-primary) 100%);color:#03181a;font-weight:900;">Send</button>
+                </div>
+                <div style="margin-top:10px;font-size:12px;color:var(--text-muted);word-break:break-all;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                    <div style="min-width:0;flex:1;"><span style="opacity:0.85;">TXID:</span> <span id="walletSendKasTxid">—</span></div>
+                    <button id="walletCopySendKasTxidBtn" class="copyBtn" type="button">Copy</button>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-                <div style="font-size:12px;color:var(--text-muted);">Balance</div>
-                <button id="walletBalanceRefreshBtn" style="cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Refresh</button>
+            <div class="collapseCard card" style="grid-column: 1 / -1;">
+              <input id="walletAccountCardToggle" class="collapseToggle" type="checkbox" checked />
+              <div class="collapseHeader">
+                <label class="collapseTitle" for="walletAccountCardToggle">Account</label>
+                <div class="collapseActions">
+                  <button id="walletDeriveBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Refresh address</button>
+                  <label class="collapseChevron" for="walletAccountCardToggle" aria-label="Toggle"></label>
+                </div>
               </div>
-              <div style="margin-top:6px;font-size:18px;font-weight:950;letter-spacing:0.01em;">
-                <span id="walletBalance">—</span> <span style="font-size:12px;color:var(--text-muted);font-weight:800;">KAS</span>
-              </div>
-              <div style="margin-top:10px;height:1px;background:rgba(112, 199, 186, 0.14);"></div>
+              <div class="collapseBody">
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                  <label style="font-size:12px;color:var(--text-muted);">Network</label>
+                  <select id="walletNetwork" style="padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);">
+                    <option value="mainnet">mainnet</option>
+                    <option value="testnet">testnet</option>
+                    <option value="devnet">devnet</option>
+                  </select>
+                  <label style="font-size:12px;color:var(--text-muted);">RPC</label>
+                  <input id="walletRpcUrl" type="text" value="grpc://127.0.0.1:16110" spellcheck="false" style="flex:1;min-width:220px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                </div>
 
-              <div style="margin-top:10px;font-size:12px;color:var(--text-muted);">Send KAS</div>
-              <div style="margin-top:6px;display:flex;gap:10px;">
-                <input id="walletSendTo" type="text" placeholder="To address" spellcheck="false" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
-              </div>
-              <div id="walletSendToResolved" class="knsPreview" style="display:none;"></div>
-              <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
-                <input id="walletSendAmount" type="number" step="0.00000001" value="0" style="width:140px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
-                <button id="walletSendKasBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:linear-gradient(135deg,var(--kaspa-accent) 0%,var(--kaspa-primary) 100%);color:#03181a;font-weight:900;">Send</button>
-              </div>
-              <div style="margin-top:10px;font-size:12px;color:var(--text-muted);word-break:break-all;">
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-                  <div style="min-width:0;flex:1;"><span style="opacity:0.85;">TXID:</span> <span id="walletSendKasTxid">—</span></div>
-                  <button id="walletCopySendKasTxidBtn" class="copyBtn" type="button">Copy</button>
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+                  <label style="font-size:12px;color:var(--text-muted);">Base</label>
+                  <input id="walletBasePath" type="text" value="m/44'/111111'/0'" spellcheck="false" style="flex:1;min-width:240px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                </div>
+
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+                  <label style="font-size:12px;color:var(--text-muted);">Chain</label>
+                  <select id="walletChain" style="padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);">
+                    <option value="0">receive</option>
+                    <option value="1">change</option>
+                  </select>
+                  <label style="font-size:12px;color:var(--text-muted);">Index</label>
+                  <input id="walletAddrIndex" type="number" value="0" min="0" step="1" style="width:110px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
                 </div>
               </div>
             </div>
@@ -158,76 +189,117 @@
 
         <div id="walletManagePanel" style="display:none;margin-top:14px;">
 
-        <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-          <div>
-            <div style="font-weight:750;margin-bottom:8px;">Create profile (new mnemonic)</div>
-            <div style="display:flex;gap:10px;">
-              <input id="walletNewUsername" type="text" placeholder="Username" spellcheck="false" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
-              <input id="walletNewPassword" type="password" placeholder="Password" autocomplete="off" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
-              <select id="walletWordCount" style="width:96px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);">
-                <option value="24">24</option>
-                <option value="12">12</option>
-              </select>
-              <button id="walletCreateBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:linear-gradient(135deg,var(--kaspa-accent) 0%,var(--kaspa-primary) 100%);color:#03181a;font-weight:900;">Create</button>
-            </div>
-            <div style="margin-top:6px;font-size:11px;color:var(--text-muted);line-height:1.35;">This will show a mnemonic once. Save it securely.</div>
-          </div>
-
-          <div>
-            <div style="font-weight:750;margin-bottom:8px;">Import profile</div>
-            <div style="display:flex;gap:10px;">
-              <input id="walletImportUsername" type="text" placeholder="Username" spellcheck="false" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
-              <input id="walletImportPassword" type="password" placeholder="Password" autocomplete="off" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
-            </div>
-
-            <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-              <div>
-                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Mnemonic (12/24 words)</label>
-                <textarea id="walletImportMnemonic" rows="3" spellcheck="false" style="width:100%;resize:vertical;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);"></textarea>
-                <div style="display:flex;gap:10px;margin-top:8px;">
-                  <input id="walletMnemonicPass" type="password" placeholder="Mnemonic passphrase (optional)" autocomplete="off" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
-                  <button id="walletImportMnemonicBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Import mnemonic</button>
-                </div>
-              </div>
-              <div>
-                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Private key (hex)</label>
-                <textarea id="walletImportPrivKey" rows="3" spellcheck="false" style="width:100%;resize:vertical;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);"></textarea>
-                <div style="display:flex;justify-content:flex-end;margin-top:8px;">
-                  <button id="walletImportPrivKeyBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Import private key</button>
-                </div>
+        <div class="walletGrid" style="margin-top:14px;">
+          <div class="collapseCard card">
+            <input id="walletManageCreateToggle" class="collapseToggle" type="checkbox" checked />
+            <div class="collapseHeader">
+              <label class="collapseTitle" for="walletManageCreateToggle">Create profile (new mnemonic)</label>
+              <div class="collapseActions">
+                <label class="collapseChevron" for="walletManageCreateToggle" aria-label="Toggle"></label>
               </div>
             </div>
+            <div class="collapseBody">
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <input id="walletNewUsername" type="text" placeholder="Username" spellcheck="false" style="flex:1;min-width:180px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                <input id="walletNewPassword" type="password" placeholder="Password" autocomplete="off" style="flex:1;min-width:180px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                <select id="walletWordCount" style="width:96px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);">
+                  <option value="24">24</option>
+                  <option value="12">12</option>
+                </select>
+                <button id="walletCreateBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:linear-gradient(135deg,var(--kaspa-accent) 0%,var(--kaspa-primary) 100%);color:#03181a;font-weight:900;">Create</button>
+              </div>
+              <div style="margin-top:6px;font-size:11px;color:var(--text-muted);line-height:1.35;">This will show a mnemonic once. Save it securely.</div>
+            </div>
           </div>
-        </div>
 
-        <div style="margin-top:14px;">
-          <div style="font-weight:750;margin-bottom:8px;">Wallet data</div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;">
-            <button id="walletDeleteProfileBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Delete selected profile</button>
-            <button id="walletClearAllProfilesBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255, 120, 120, 0.35);background:rgba(255, 80, 80, 0.12);color:var(--text);font-weight:950;">Clear ALL wallet data</button>
+          <div class="collapseCard card">
+            <input id="walletManageImportToggle" class="collapseToggle" type="checkbox" checked />
+            <div class="collapseHeader">
+              <label class="collapseTitle" for="walletManageImportToggle">Import profile</label>
+              <div class="collapseActions">
+                <label class="collapseChevron" for="walletManageImportToggle" aria-label="Toggle"></label>
+              </div>
+            </div>
+            <div class="collapseBody">
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <input id="walletImportUsername" type="text" placeholder="Username" spellcheck="false" style="flex:1;min-width:180px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                <input id="walletImportPassword" type="password" placeholder="Password" autocomplete="off" style="flex:1;min-width:180px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+              </div>
+
+              <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div>
+                  <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Mnemonic (12/24 words)</label>
+                  <textarea id="walletImportMnemonic" rows="3" spellcheck="false" style="width:100%;resize:vertical;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);"></textarea>
+                  <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;">
+                    <input id="walletMnemonicPass" type="password" placeholder="Mnemonic passphrase (optional)" autocomplete="off" style="flex:1;min-width:220px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                    <button id="walletImportMnemonicBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Import mnemonic</button>
+                  </div>
+                </div>
+                <div>
+                  <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Private key (hex)</label>
+                  <textarea id="walletImportPrivKey" rows="3" spellcheck="false" style="width:100%;resize:vertical;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);"></textarea>
+                  <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+                    <button id="walletImportPrivKeyBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Import private key</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div style="margin-top:6px;font-size:11px;color:var(--text-muted);line-height:1.35;">These actions remove saved wallet profiles (usernames/accounts) from this device.</div>
+
+          <div class="collapseCard card" style="grid-column: 1 / -1;">
+            <input id="walletManageDataToggle" class="collapseToggle" type="checkbox" checked />
+            <div class="collapseHeader">
+              <label class="collapseTitle" for="walletManageDataToggle">Wallet data</label>
+              <div class="collapseActions">
+                <label class="collapseChevron" for="walletManageDataToggle" aria-label="Toggle"></label>
+              </div>
+            </div>
+            <div class="collapseBody">
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button id="walletDeleteProfileBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Delete selected profile</button>
+                <button id="walletClearAllProfilesBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255, 120, 120, 0.35);background:rgba(255, 80, 80, 0.12);color:var(--text);font-weight:950;">Clear ALL wallet data</button>
+              </div>
+              <div style="margin-top:6px;font-size:11px;color:var(--text-muted);line-height:1.35;">These actions remove saved wallet profiles (usernames/accounts) from this device.</div>
+            </div>
+          </div>
         </div>
 
         </div>
 
         <div id="walletAdvancedPanel" style="display:none;margin-top:14px;">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-            <div>
-              <div style="font-weight:750;margin-bottom:8px;">Debug</div>
-              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-                <button id="walletDebugBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Fingerprint</button>
-                <div style="font-size:12px;color:var(--text-muted);word-break:break-all;" id="walletDebugOut">—</div>
+          <div class="walletGrid">
+            <div class="collapseCard card">
+              <input id="walletAdvancedDebugToggle" class="collapseToggle" type="checkbox" checked />
+              <div class="collapseHeader">
+                <label class="collapseTitle" for="walletAdvancedDebugToggle">Debug</label>
+                <div class="collapseActions">
+                  <label class="collapseChevron" for="walletAdvancedDebugToggle" aria-label="Toggle"></label>
+                </div>
+              </div>
+              <div class="collapseBody">
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                  <button id="walletDebugBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Fingerprint</button>
+                  <div style="font-size:12px;color:var(--text-muted);word-break:break-all;" id="walletDebugOut">—</div>
+                </div>
               </div>
             </div>
-            <div>
-              <div style="font-weight:750;margin-bottom:8px;">Import node tools</div>
-              <div style="font-size:12px;color:var(--text-muted);line-height:1.35;">Select the folder containing <span style="font-weight:850;">kaspad.exe</span>, <span style="font-weight:850;">stratum-bridge.exe</span>, and <span style="font-weight:850;">config.yaml</span>.</div>
-              <div style="margin-top:10px;font-size:12px;color:var(--text-muted);word-break:break-all;">Current: <span id="nodeBundleDirOut">—</span></div>
-              <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
-                <button id="nodeBundleImportBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Import</button>
-                <button id="nodeBundleOpenBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Open folder</button>
-                <button id="nodeBundleClearBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255, 120, 120, 0.35);background:rgba(255, 80, 80, 0.12);color:var(--text);font-weight:900;">Clear</button>
+
+            <div class="collapseCard card">
+              <input id="walletAdvancedNodeToolsToggle" class="collapseToggle" type="checkbox" checked />
+              <div class="collapseHeader">
+                <label class="collapseTitle" for="walletAdvancedNodeToolsToggle">Import node tools</label>
+                <div class="collapseActions">
+                  <label class="collapseChevron" for="walletAdvancedNodeToolsToggle" aria-label="Toggle"></label>
+                </div>
+              </div>
+              <div class="collapseBody">
+                <div style="font-size:12px;color:var(--text-muted);line-height:1.35;">Select the folder containing <span style="font-weight:850;">kaspad.exe</span>, <span style="font-weight:850;">stratum-bridge.exe</span>, and <span style="font-weight:850;">config.yaml</span>.</div>
+                <div style="margin-top:10px;font-size:12px;color:var(--text-muted);word-break:break-all;">Current: <span id="nodeBundleDirOut">—</span></div>
+                <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+                  <button id="nodeBundleImportBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Import</button>
+                  <button id="nodeBundleOpenBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Open folder</button>
+                  <button id="nodeBundleClearBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255, 120, 120, 0.35);background:rgba(255, 80, 80, 0.12);color:var(--text);font-weight:900;">Clear</button>
+                </div>
               </div>
             </div>
           </div>

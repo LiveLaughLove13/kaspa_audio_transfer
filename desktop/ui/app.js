@@ -808,6 +808,7 @@
           return new Promise((resolve, reject) => {
             const r = new FileReader();
             r.onerror = () => reject(new Error("failed reading blob"));
+
             r.onload = () => resolve(String(r.result || ""));
             r.readAsDataURL(blob);
           });
@@ -1115,10 +1116,14 @@
           } catch (e) {
             try {
               if (videoStream) videoStream.getTracks().forEach((t) => t.stop());
-            } catch (_) {}
+            } catch (_) {
+              // ignore
+            }
             try {
               if (audioStream) audioStream.getTracks().forEach((t) => t.stop());
-            } catch (_) {}
+            } catch (_) {
+              // ignore
+            }
             throw e;
           }
 
@@ -1926,6 +1931,87 @@
 
         await refreshProfiles();
         await refreshWalletStatus();
+
+        async function showStartupWalletModal() {
+          const stored = localStorage.getItem("kat_show_startup_wallet_modal");
+          if (stored === "0") return;
+
+          let unlocked = null;
+          try {
+            unlocked = await tauri.invoke("wallet_unlocked_username", {});
+          } catch (_) {
+            unlocked = null;
+          }
+          if (unlocked) return;
+
+          let profiles = [];
+          try {
+            profiles = (await tauri.invoke("wallet_profiles_list", {})) || [];
+          } catch (_) {
+            profiles = [];
+          }
+
+          const hasProfiles = Array.isArray(profiles) && profiles.length > 0;
+          const title = hasProfiles ? "Welcome back" : "Welcome";
+          const body = hasProfiles
+            ? "Choose how to continue:\n\n- Unlock an existing wallet profile\n- Create a new wallet profile\n- Import from mnemonic or private key\n\nYou can also continue without a wallet."
+            : "Let’s set up your wallet:\n\n- Create a new wallet profile\n- Import from mnemonic or private key\n\nYou can also continue without a wallet.";
+
+          const focusLater = (fn) => setTimeout(() => {
+            try {
+              fn();
+            } catch (_) {}
+          }, 50);
+
+          const goWallet = () => {
+            setActivePage("wallet");
+          };
+
+          const actions = [];
+          if (hasProfiles) {
+            actions.push({
+              label: "Unlock",
+              primary: true,
+              onClick: async () => {
+                goWallet();
+                setWalletTab("overview");
+                focusLater(() => walletPasswordEl && walletPasswordEl.focus());
+              },
+            });
+          }
+
+          actions.push({
+            label: "Create wallet",
+            primary: !hasProfiles,
+            onClick: async () => {
+              goWallet();
+              setWalletTab("manage");
+              focusLater(() => walletNewUsernameEl && walletNewUsernameEl.focus());
+            },
+          });
+
+          actions.push({
+            label: "Import wallet",
+            onClick: async () => {
+              goWallet();
+              setWalletTab("manage");
+              focusLater(() => walletImportUsernameEl && walletImportUsernameEl.focus());
+            },
+          });
+
+          actions.push({
+            label: "Don’t show again",
+            onClick: async () => {
+              localStorage.setItem("kat_show_startup_wallet_modal", "0");
+            },
+          });
+
+          actions.push({ label: "Continue" });
+
+          showModal({ title, body, actions });
+        }
+
+        await showStartupWalletModal();
 
         // Prevent default browser behavior (opening the file / navigation) on drop.
         window.addEventListener("dragover", (e) => e.preventDefault());
