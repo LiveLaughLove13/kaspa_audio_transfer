@@ -22,6 +22,46 @@ use tauri::api::path::data_dir;
 
 const DEFAULT_WALLET_DERIVATION_PATH: &str = "m/44'/111111'/0'/0/0";
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WalletTxHistoryItem {
+    txid: String,
+    timestamp_ms: Option<u64>,
+    net_sompi: i64,
+    accepted: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RestTxInput {
+    previous_outpoint_address: Option<String>,
+    previous_outpoint_amount: Option<u64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RestTxOutput {
+    amount: u64,
+    script_public_key_address: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RestTxModel {
+    transaction_id: Option<String>,
+    block_time: Option<u64>,
+    accepting_block_time: Option<u64>,
+    is_accepted: Option<bool>,
+    inputs: Option<Vec<RestTxInput>>,
+    outputs: Option<Vec<RestTxOutput>>,
+}
+
+fn kaspa_rest_base_url(network: &str) -> &'static str {
+    match network.trim() {
+        "mainnet" => "https://api.kaspa.org",
+        "testnet" => "https://api-tn10.kaspa.org",
+        "devnet" => "https://api.kaspa.org",
+        _ => "https://api.kaspa.org",
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct AppSettings {
     #[serde(default)]
@@ -278,6 +318,93 @@ async fn wallet_send_kas(
         amount_kas,
     )
     .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn wallet_tx_history(network: String, address: String, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<WalletTxHistoryItem>, String> {
+    let addr = address.trim();
+    if addr.is_empty() {
+        return Err("address is empty".to_string());
+    }
+    let limit = limit.unwrap_or(25).min(200).max(1);
+    let offset = offset.unwrap_or(0);
+
+    let base = kaspa_rest_base_url(&network);
+    let url = format!(
+        "{}/addresses/{}/full-transactions?limit={}&offset={}&resolve_previous_outpoints=light",
+        base,
+        urlencoding::encode(addr),
+        limit,
+        offset
+    );
+
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("REST client build failed: {e}"))?;
+
+    let txs = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("REST request failed: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("REST error: {e}"))?
+        .json::<Vec<RestTxModel>>()
+        .await
+        .map_err(|e| format!("REST json parse failed: {e}"))?;
+
+    let mut out: Vec<WalletTxHistoryItem> = Vec::with_capacity(txs.len());
+    for t in txs {
+        let txid = match t.transaction_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            Some(v) => v.to_string(),
+            None => continue,
+        };
+
+        let mut in_sum: u64 = 0;
+        let mut out_sum: u64 = 0;
+
+        if let Some(inputs) = t.inputs.as_ref() {
+            for i in inputs {
+                if i.previous_outpoint_address.as_deref().map(str::trim) == Some(addr) {
+                    if let Some(a) = i.previous_outpoint_amount {
+                        in_sum = in_sum.saturating_add(a);
+                    }
+                }
+            }
+        }
+        if let Some(outputs) = t.outputs.as_ref() {
+            for o in outputs {
+                if o.script_public_key_address.as_deref().map(str::trim) == Some(addr) {
+                    out_sum = out_sum.saturating_add(o.amount);
+                }
+            }
+        }
+
+        let net = out_sum as i128 - in_sum as i128;
+        let net_sompi = if net > i64::MAX as i128 {
+            i64::MAX
+        } else if net < i64::MIN as i128 {
+            i64::MIN
+        } else {
+            net as i64
+        };
+
+        let ts = t
+            .accepting_block_time
+            .or(t.block_time)
+            .filter(|v| *v > 0);
+
+        out.push(WalletTxHistoryItem {
+            txid,
+            timestamp_ms: ts,
+            net_sompi,
+            accepted: t.is_accepted,
+        });
+    }
+
+    out.sort_by_key(|t| std::cmp::Reverse(t.timestamp_ms.unwrap_or(0)));
+    Ok(out)
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -1201,6 +1328,7 @@ fn main() {
             wallet_debug_unlocked_material_fingerprint,
             wallet_get_balance,
             wallet_send_kas,
+            wallet_tx_history,
             wallet_status,
             wallet_core_send_file_b64,
             wallet_send_file_b64,

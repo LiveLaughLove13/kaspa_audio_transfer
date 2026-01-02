@@ -155,6 +155,11 @@
 
       const pillTextEl = document.getElementById("pillText");
 
+      const walletTxRefreshBtnEl = document.getElementById("walletTxRefreshBtn");
+      const walletTxHistoryStatusEl = document.getElementById("walletTxHistoryStatus");
+      const walletTxReceivedListEl = document.getElementById("walletTxReceivedList");
+      const walletTxSentListEl = document.getElementById("walletTxSentList");
+
       let lastReceivedPath = "";
       let selectedSendFile = null;
 
@@ -174,6 +179,14 @@
         const t = String(txid || "").trim();
         if (!t) return "https://explorer.kaspa.org/transactions/";
         return `https://explorer.kaspa.org/transactions/${t}`;
+      }
+
+      function formatKasFromSompi(sompi) {
+        const v = Number(sompi || 0);
+        if (!Number.isFinite(v)) return "0";
+        const kas = v / 100000000;
+        const fixed = kas.toFixed(8);
+        return fixed.replace(/\.0+$/, "").replace(/(\.[0-9]*?)0+$/, "$1");
       }
 
       async function openExternal(url) {
@@ -224,104 +237,36 @@
         document.body.removeChild(el);
       }
 
+      function showModal({ title, body, actions }) {
+        if (!modalOverlayEl || !modalTitleEl || !modalBodyEl || !modalActionsEl) return;
+
+        modalTitleEl.textContent = title || "Notification";
+        modalBodyEl.textContent = body || "";
+        modalActionsEl.innerHTML = "";
+
+        (actions || []).forEach((a) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = `modalBtn ${a && a.primary ? "modalBtnPrimary" : ""}`.trim();
+          b.textContent = (a && a.label) || "OK";
+          b.addEventListener("click", async () => {
+            try {
+              if (a && a.onClick) await a.onClick();
+            } finally {
+              if (!(a && a.keepOpen)) closeModal();
+            }
+          });
+          modalActionsEl.appendChild(b);
+        });
+
+        modalOverlayEl.style.display = "flex";
+      }
+
       function closeModal() {
         modalOverlayEl.style.display = "none";
         modalTitleEl.textContent = "Notification";
         modalBodyEl.textContent = "";
         modalActionsEl.innerHTML = "";
-      }
-
-      function clearSession() {
-        closeModal();
-        setError("");
-
-        sendProgressEl.textContent = "Idle";
-        recvStatusEl.textContent = "Idle";
-        setRing(sendRingEl, 0);
-        setRing(recvRingEl, 0);
-
-        sendTxidEl.textContent = "—";
-        lastReceivedPath = "";
-        selectedSendFile = null;
-        if (sendFileHintEl) sendFileHintEl.textContent = "Tip: drag & drop a file here.";
-
-        if (sendFileEl) sendFileEl.value = "";
-        sendPrivEl.value = "";
-        sendToEl.value = "";
-        sendAmountEl.value = "0";
-        sendRpcEl.value = "grpc://127.0.0.1:16110";
-
-        if (sendToResolvedEl) {
-          sendToResolvedEl.style.display = "none";
-          sendToResolvedEl.className = "knsPreview";
-          sendToResolvedEl.textContent = "";
-          delete sendToResolvedEl.dataset.knsInput;
-          delete sendToResolvedEl.dataset.knsNetwork;
-          delete sendToResolvedEl.dataset.resolvedAddr;
-        }
-        if (walletSendToResolvedEl) {
-          walletSendToResolvedEl.style.display = "none";
-          walletSendToResolvedEl.className = "knsPreview";
-          walletSendToResolvedEl.textContent = "";
-          delete walletSendToResolvedEl.dataset.knsInput;
-          delete walletSendToResolvedEl.dataset.knsNetwork;
-          delete walletSendToResolvedEl.dataset.resolvedAddr;
-        }
-        if (studioAudioToResolvedEl) {
-          studioAudioToResolvedEl.style.display = "none";
-          studioAudioToResolvedEl.className = "knsPreview";
-          studioAudioToResolvedEl.textContent = "";
-          delete studioAudioToResolvedEl.dataset.knsInput;
-          delete studioAudioToResolvedEl.dataset.knsNetwork;
-          delete studioAudioToResolvedEl.dataset.resolvedAddr;
-        }
-        if (studioVideoToResolvedEl) {
-          studioVideoToResolvedEl.style.display = "none";
-          studioVideoToResolvedEl.className = "knsPreview";
-          studioVideoToResolvedEl.textContent = "";
-          delete studioVideoToResolvedEl.dataset.knsInput;
-          delete studioVideoToResolvedEl.dataset.knsNetwork;
-          delete studioVideoToResolvedEl.dataset.resolvedAddr;
-        }
-
-        recvTxEl.value = "";
-        recvStartEl.value = "";
-        recvRpcEl.value = "grpc://127.0.0.1:16110";
-        recvOutEl.value = "received.bin";
-      }
-
-      function setDroppedFile(file) {
-        if (!file) return;
-        selectedSendFile = file;
-        if (sendFileHintEl) sendFileHintEl.textContent = `Selected: ${file.name}`;
-      }
-
-      function setPickedFile(file) {
-        selectedSendFile = file || null;
-        if (sendFileHintEl) {
-          sendFileHintEl.textContent = file ? `Selected: ${file.name}` : "Tip: drag & drop a file here.";
-        }
-      }
-
-      function showModal({ title, body, actions }) {
-        modalTitleEl.textContent = title || "Notification";
-        modalBodyEl.textContent = body || "";
-        modalActionsEl.innerHTML = "";
-        (actions || []).forEach((a) => {
-          const b = document.createElement("button");
-          b.type = "button";
-          b.className = `modalBtn ${a.primary ? "modalBtnPrimary" : ""}`;
-          b.textContent = a.label || "Action";
-          b.addEventListener("click", async () => {
-            try {
-              if (a.onClick) await a.onClick();
-            } finally {
-              if (!a.keepOpen) closeModal();
-            }
-          });
-          modalActionsEl.appendChild(b);
-        });
-        modalOverlayEl.style.display = "flex";
       }
 
       function setError(msg) {
@@ -729,6 +674,9 @@
               if (walletDerivedAddressEl) walletDerivedAddressEl.textContent = "—";
               if (walletBalanceEl) walletBalanceEl.textContent = "—";
               if (walletSendKasTxidEl) walletSendKasTxidEl.textContent = "—";
+              if (walletTxHistoryStatusEl) walletTxHistoryStatusEl.textContent = "Unlock wallet to view history.";
+              if (walletTxReceivedListEl) walletTxReceivedListEl.innerHTML = "";
+              if (walletTxSentListEl) walletTxSentListEl.innerHTML = "";
             }
           } catch (_) {
             isWalletSessionUnlocked = false;
@@ -737,6 +685,123 @@
             walletStatusEl.textContent = "Wallet error";
             walletUnlockedEl.textContent = "—";
           }
+        }
+
+        async function refreshWalletTxHistory() {
+          if (!walletTxHistoryStatusEl || !walletTxReceivedListEl || !walletTxSentListEl) return;
+          if (!isWalletSessionUnlocked) {
+            walletTxHistoryStatusEl.textContent = "Unlock wallet to view history.";
+            walletTxReceivedListEl.innerHTML = "";
+            walletTxSentListEl.innerHTML = "";
+            return;
+          }
+
+          const address = String(walletDerivedAddressEl?.textContent || "").trim();
+          if (!address || address === "—") {
+            walletTxHistoryStatusEl.textContent = "Derive an address to view history.";
+            walletTxReceivedListEl.innerHTML = "";
+            walletTxSentListEl.innerHTML = "";
+            return;
+          }
+
+          walletTxHistoryStatusEl.textContent = "Loading…";
+          walletTxReceivedListEl.innerHTML = "";
+          walletTxSentListEl.innerHTML = "";
+
+          const network = walletNetworkEl?.value || "mainnet";
+
+          const items = (await tauri.invoke("wallet_tx_history", {
+            network,
+            address,
+            limit: 50,
+            offset: 0,
+          })) || [];
+
+          const received = [];
+          const sent = [];
+
+          (items || []).forEach((it) => {
+            const netSompi = Number(it?.netSompi || 0);
+            if (netSompi > 0) received.push(it);
+            else if (netSompi < 0) sent.push(it);
+          });
+
+          const mkRow = (it, kind) => {
+            const txid = String(it?.txid || "").trim();
+            const netSompi = Number(it?.netSompi || 0);
+            const ts = it?.timestampMs ? new Date(Number(it.timestampMs)) : null;
+            const when = ts && Number.isFinite(ts.getTime()) ? ts.toLocaleString() : "";
+            const accepted = it?.accepted;
+            const accText = accepted === true ? "Accepted" : accepted === false ? "Pending" : "";
+            const meta = [when, accText].filter(Boolean).join(" • ");
+
+            const row = document.createElement("div");
+            row.className = "txRow";
+
+            const badge = document.createElement("div");
+            badge.className = `txBadge ${kind === "sent" ? "txBadgeSent" : "txBadgeRecv"}`.trim();
+            badge.textContent = kind === "sent" ? "Sent" : "Received";
+
+            const main = document.createElement("div");
+            main.className = "txMain";
+
+            const id = document.createElement("div");
+            id.className = "txId";
+            id.textContent = txid || "(unknown txid)";
+
+            const metaEl = document.createElement("div");
+            metaEl.className = "txMeta";
+            metaEl.textContent = meta;
+
+            main.appendChild(id);
+            if (meta) main.appendChild(metaEl);
+
+            const amt = document.createElement("div");
+            amt.className = "txAmt";
+            const absSompi = Math.abs(netSompi);
+            const sign = kind === "sent" ? "-" : "+";
+            amt.textContent = `${sign}${formatKasFromSompi(absSompi)} KAS`;
+
+            row.appendChild(badge);
+            row.appendChild(main);
+            row.appendChild(amt);
+
+            if (txid) {
+              row.style.cursor = "pointer";
+              row.addEventListener("click", () => openExternal(getExplorerTxUrl(txid)));
+            }
+            return row;
+          };
+
+          if (received.length === 0 && sent.length === 0) {
+            walletTxHistoryStatusEl.textContent = "No transactions found for this address.";
+            return;
+          }
+
+          walletTxHistoryStatusEl.textContent = "";
+
+          if (received.length === 0) {
+            walletTxReceivedListEl.textContent = "No received transactions.";
+          } else {
+            received.slice(0, 25).forEach((it) => walletTxReceivedListEl.appendChild(mkRow(it, "recv")));
+          }
+
+          if (sent.length === 0) {
+            walletTxSentListEl.textContent = "No sent transactions.";
+          } else {
+            sent.slice(0, 25).forEach((it) => walletTxSentListEl.appendChild(mkRow(it, "sent")));
+          }
+        }
+
+        if (walletTxRefreshBtnEl) {
+          walletTxRefreshBtnEl.addEventListener("click", async () => {
+            setError("");
+            try {
+              await refreshWalletTxHistory();
+            } catch (e) {
+              setError(String(e));
+            }
+          });
         }
 
         if (sendPrivEl) {
@@ -1500,6 +1565,7 @@
               const amountKas = Number(studioVideoAmountEl?.value || "0");
               const rpcUrl = studioVideoRpcEl?.value.trim() || "";
               const fromPrivateKey = isWalletSessionUnlocked ? "" : (studioVideoPrivEl?.value.trim() || "");
+
               if (!toAddress) {
                 setError("Enter to address.");
                 return;
@@ -1628,6 +1694,12 @@
             walletBalanceEl.textContent = Number.isFinite(b) ? b.toFixed(8) : "—";
           } catch (_) {
             walletBalanceEl.textContent = "—";
+          }
+
+          try {
+            await refreshWalletTxHistory();
+          } catch (_) {
+            // ignore
           }
         }
 

@@ -20,6 +20,7 @@
       <nav class="nav-links" aria-label="Primary">
         <button id="navTransfer" class="navBtn navBtnActive" type="button">Transfer</button>
         <button id="navWallet" class="navBtn" type="button">Wallet</button>
+        <button id="navImport" class="navBtn" type="button">Import</button>
         <button id="navStudio" class="navBtn" type="button">Studio</button>
       </nav>
 
@@ -142,6 +143,30 @@
                   <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
                     <div style="min-width:0;flex:1;"><span style="opacity:0.85;">TXID:</span> <span id="walletSendKasTxid">—</span></div>
                     <button id="walletCopySendKasTxidBtn" class="copyBtn" type="button">Copy</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="collapseCard card" style="grid-column: 1 / -1;">
+              <input id="walletTxHistoryCardToggle" class="collapseToggle" type="checkbox" checked />
+              <div class="collapseHeader">
+                <label class="collapseTitle" for="walletTxHistoryCardToggle">Transaction History</label>
+                <div class="collapseActions">
+                  <button id="walletTxRefreshBtn" style="cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.20);color:var(--text);font-weight:800;">Refresh</button>
+                  <label class="collapseChevron" for="walletTxHistoryCardToggle" aria-label="Toggle"></label>
+                </div>
+              </div>
+              <div class="collapseBody">
+                <div id="walletTxHistoryStatus" style="font-size:12px;color:var(--text-muted);">—</div>
+                <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                  <div>
+                    <div style="font-weight:850;margin-bottom:8px;">Received</div>
+                    <div id="walletTxReceivedList" class="txList"></div>
+                  </div>
+                  <div>
+                    <div style="font-weight:850;margin-bottom:8px;">Sent</div>
+                    <div id="walletTxSentList" class="txList"></div>
                   </div>
                 </div>
               </div>
@@ -283,27 +308,37 @@
                 </div>
               </div>
             </div>
-
-            <div class="collapseCard card">
-              <input id="walletAdvancedNodeToolsToggle" class="collapseToggle" type="checkbox" checked />
-              <div class="collapseHeader">
-                <label class="collapseTitle" for="walletAdvancedNodeToolsToggle">Import node tools</label>
-                <div class="collapseActions">
-                  <label class="collapseChevron" for="walletAdvancedNodeToolsToggle" aria-label="Toggle"></label>
-                </div>
-              </div>
-              <div class="collapseBody">
-                <div style="font-size:12px;color:var(--text-muted);line-height:1.35;">Select the folder containing <span style="font-weight:850;">kaspad.exe</span>, <span style="font-weight:850;">stratum-bridge.exe</span>, and <span style="font-weight:850;">config.yaml</span>.</div>
-                <div style="margin-top:10px;font-size:12px;color:var(--text-muted);word-break:break-all;">Current: <span id="nodeBundleDirOut">—</span></div>
-                <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
-                  <button id="nodeBundleImportBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Import</button>
-                  <button id="nodeBundleOpenBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Open folder</button>
-                  <button id="nodeBundleClearBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255, 120, 120, 0.35);background:rgba(255, 80, 80, 0.12);color:var(--text);font-weight:900;">Clear</button>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
+              </section>
+            </section>
+
+            <section id="pageImport" class="page">
+              <section class="card">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                  <div style="font-weight:800;">Import</div>
+                </div>
+
+                <div style="margin-top:14px;">
+                  <div class="collapseCard card">
+                    <input id="importNodeToolsToggle" class="collapseToggle" type="checkbox" checked />
+                    <div class="collapseHeader">
+                      <label class="collapseTitle" for="importNodeToolsToggle">Import node tools</label>
+                      <div class="collapseActions">
+                        <label class="collapseChevron" for="importNodeToolsToggle" aria-label="Toggle"></label>
+                      </div>
+                    </div>
+                    <div class="collapseBody">
+                      <div style="font-size:12px;color:var(--text-muted);line-height:1.35;">Select the folder containing <span style="font-weight:850;">kaspad.exe</span>, <span style="font-weight:850;">stratum-bridge.exe</span>, and <span style="font-weight:850;">config.yaml</span>.</div>
+                      <div style="margin-top:10px;font-size:12px;color:var(--text-muted);word-break:break-all;">Current: <span id="nodeBundleDirOut">—</span></div>
+                      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+                        <button id="nodeBundleImportBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Import</button>
+                        <button id="nodeBundleOpenBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Open folder</button>
+                        <button id="nodeBundleClearBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255, 120, 120, 0.35);background:rgba(255, 80, 80, 0.12);color:var(--text);font-weight:900;">Clear</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </section>
             </section>
 
@@ -557,5 +592,67 @@
     </div>
 
     <script src="app.js"></script>
+    <script>
+      (function () {
+        const navTransfer = document.getElementById("navTransfer");
+        const navWallet = document.getElementById("navWallet");
+        const navImport = document.getElementById("navImport");
+        const navStudio = document.getElementById("navStudio");
+
+        const pageTransfer = document.getElementById("pageTransfer");
+        const pageWallet = document.getElementById("pageWallet");
+        const pageImport = document.getElementById("pageImport");
+        const pageStudio = document.getElementById("pageStudio");
+
+        const pageTitle = document.getElementById("pageTitle");
+        const status = document.getElementById("status");
+
+        if (!navTransfer || !navWallet || !navImport || !navStudio) return;
+        if (!pageTransfer || !pageWallet || !pageImport || !pageStudio) return;
+
+        const setActive = (name) => {
+          const isTransfer = name === "transfer";
+          const isWallet = name === "wallet";
+          const isImport = name === "import";
+          const isStudio = name === "studio";
+
+          pageTransfer.className = `page ${isTransfer ? "pageActive" : ""}`.trim();
+          pageWallet.className = `page ${isWallet ? "pageActive" : ""}`.trim();
+          pageImport.className = `page ${isImport ? "pageActive" : ""}`.trim();
+          pageStudio.className = `page ${isStudio ? "pageActive" : ""}`.trim();
+
+          navTransfer.className = `navBtn ${isTransfer ? "navBtnActive" : ""}`.trim();
+          navWallet.className = `navBtn ${isWallet ? "navBtnActive" : ""}`.trim();
+          navImport.className = `navBtn ${isImport ? "navBtnActive" : ""}`.trim();
+          navStudio.className = `navBtn ${isStudio ? "navBtnActive" : ""}`.trim();
+
+          if (pageTitle) pageTitle.textContent = isTransfer ? "Transfer" : isWallet ? "Wallet" : isImport ? "Import" : "Studio";
+          if (status) {
+            status.textContent =
+              isTransfer
+                ? "Send or receive a file using your local Kaspa node RPC."
+                : isWallet
+                  ? "Manage your wallet, balance, and transactions."
+                  : isImport
+                    ? "Import node tools and configure local components."
+                    : "Record and send audio/video. Use wallet sync for automatic signing.";
+          }
+        };
+
+        const intercept = (name) => (e) => {
+          try {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            e.stopPropagation();
+          } catch (_) {}
+          setActive(name);
+        };
+
+        navTransfer.addEventListener("click", intercept("transfer"), true);
+        navWallet.addEventListener("click", intercept("wallet"), true);
+        navImport.addEventListener("click", intercept("import"), true);
+        navStudio.addEventListener("click", intercept("studio"), true);
+      })();
+    </script>
   </body>
 </html>
