@@ -50,7 +50,7 @@
       "targets": ["msi"],
       "identifier": "com.kaspa.audio.transfer",
       "resources": ["../../target/release/kaspa_audio_transfer.exe"],
-      "icon": ["icons/icon.ico"]
+      "icon": ["icons/icon_new.ico"]
     }
   }
 }

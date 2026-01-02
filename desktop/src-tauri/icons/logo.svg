@@ -1,0 +1,10 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="logoGrad" x1="64" y1="448" x2="448" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#49eacb"/>
+      <stop offset="1" stop-color="#70c7ba"/>
+    </linearGradient>
+  </defs>
+  <path d="M256 32L448 128V384L256 480L64 384V128L256 32Z" stroke="url(#logoGrad)" stroke-width="32" stroke-linejoin="round"/>
+  <path d="M128 256H160L192 192L224 320L256 256L288 288H320" stroke="url(#logoGrad)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

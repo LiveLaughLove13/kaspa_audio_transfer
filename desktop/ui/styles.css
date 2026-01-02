@@ -82,13 +82,15 @@
         display: inline-flex;
         align-items: center;
         gap: 10px;
-        font-weight: 800;
-        letter-spacing: 0.03em;
+        font-weight: 900;
+        letter-spacing: 0.01em;
         white-space: nowrap;
       }
 
       .logo-icon {
-        font-size: 18px;
+        width: 22px;
+        height: 22px;
+        display: block;
         filter: drop-shadow(0 0 8px rgba(112, 199, 186, 0.45));
       }
 
@@ -208,6 +210,27 @@
         padding: var(--content-pad);
         overflow: auto;
         scrollbar-gutter: stable;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(112, 199, 186, 0.3) transparent;
+      }
+
+      .content::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      .content::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .content::-webkit-scrollbar-thumb {
+        background-color: rgba(112, 199, 186, 0.3);
+        border-radius: 4px;
+        border: 2px solid transparent;
+        background-clip: content-box;
+      }
+
+      .content::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(112, 199, 186, 0.5);
       }
 
       .navBtn {
