@@ -102,6 +102,16 @@
       const walletManagePanelEl = document.getElementById("walletManagePanel");
       const walletAdvancedPanelEl = document.getElementById("walletAdvancedPanel");
 
+      const walletShellEl = document.getElementById("walletShell");
+
+      const walletHdrCreateEl = document.getElementById("walletHdrCreate");
+      const walletHdrImportEl = document.getElementById("walletHdrImport");
+      const walletHdrDeleteEl = document.getElementById("walletHdrDelete");
+
+      const walletManageCreateSectionEl = document.getElementById("walletManageCreateSection");
+      const walletManageImportSectionEl = document.getElementById("walletManageImportSection");
+      const walletManageDataSectionEl = document.getElementById("walletManageDataSection");
+
       const walletNewUsernameEl = document.getElementById("walletNewUsername");
       const walletNewPasswordEl = document.getElementById("walletNewPassword");
       const walletWordCountEl = document.getElementById("walletWordCount");
@@ -159,6 +169,8 @@
       const walletTxHistoryStatusEl = document.getElementById("walletTxHistoryStatus");
       const walletTxReceivedListEl = document.getElementById("walletTxReceivedList");
       const walletTxSentListEl = document.getElementById("walletTxSentList");
+
+      const walletHeroBalanceEl = document.getElementById("walletHeroBalance");
 
       let lastReceivedPath = "";
       let selectedSendFile = null;
@@ -310,6 +322,237 @@
         const fsApi = window.__TAURI__?.fs;
 
         let isWalletSessionUnlocked = false;
+
+        const actionOverlayEl = document.getElementById("actionOverlay");
+        const actionCanvasEl = document.getElementById("actionCanvas");
+        const actionNodesEl = document.getElementById("actionNodes");
+        const actionCloseEl = document.getElementById("actionClose");
+        const actionLogoEl = document.getElementById("actionLogo");
+        const actionTitleEl = document.getElementById("actionTitle");
+        const actionSubEl = document.getElementById("actionSub");
+
+        let actionRaf = 0;
+        let actionCleanup = null;
+        let actionOpen = false;
+
+        function hideActionOverlay() {
+          if (!actionOverlayEl) return;
+          actionOpen = false;
+          actionOverlayEl.classList.remove("actionOverlayOpen");
+          actionOverlayEl.setAttribute("aria-hidden", "true");
+          if (actionTitleEl) actionTitleEl.textContent = "";
+          if (actionSubEl) actionSubEl.textContent = "";
+          if (actionLogoEl) actionLogoEl.removeAttribute("src");
+          try {
+            if (actionCleanup) actionCleanup();
+          } catch (_) {}
+          actionCleanup = null;
+        }
+
+        function startActionDagAnimation({ logoSrc }) {
+          if (!actionOverlayEl || !actionCanvasEl || !actionNodesEl) return () => {};
+          const ctx = actionCanvasEl.getContext("2d");
+          if (!ctx) return () => {};
+
+          const dpr = Math.max(1, window.devicePixelRatio || 1);
+          const nodes = [];
+          const edges = [];
+          let tips = [];
+          let w = 0;
+          let h = 0;
+          const maxNodes = 22;
+          const spawnEveryMs = 260;
+          const edgeDrawMs = 520;
+          const startAt = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+          let nextSpawnAt = 0;
+
+          const clamp01 = (x) => Math.max(0, Math.min(1, x));
+          const ease = (x) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
+          const pick = (arr, exclude) => {
+            const a = (arr || []).filter((v) => v !== exclude);
+            if (a.length === 0) return null;
+            return a[Math.floor(Math.random() * a.length)];
+          };
+
+          const resize = () => {
+            const rect = actionOverlayEl.getBoundingClientRect();
+            w = Math.max(1, Math.floor(rect.width));
+            h = Math.max(1, Math.floor(rect.height));
+            actionCanvasEl.width = Math.floor(w * dpr);
+            actionCanvasEl.height = Math.floor(h * dpr);
+            actionCanvasEl.style.width = `${w}px`;
+            actionCanvasEl.style.height = `${h}px`;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          };
+
+          const cx = () => w * 0.5;
+
+          const addNode = (x, y) => {
+            const el = document.createElement("div");
+            el.className = "actionNode";
+            const img = document.createElement("img");
+            img.className = "actionNodeImg";
+            img.alt = "";
+            img.src = logoSrc;
+            el.appendChild(img);
+            actionNodesEl.appendChild(el);
+
+            el.style.opacity = "0";
+            el.style.transition = "opacity 420ms ease";
+
+            const n = {
+              x,
+              y,
+              el,
+              p: Math.random() * Math.PI * 2,
+              ax: 4 + Math.random() * 8,
+              ay: 3 + Math.random() * 7,
+            };
+            nodes.push(n);
+            window.requestAnimationFrame(() => {
+              el.style.opacity = "0.92";
+            });
+            return nodes.length - 1;
+          };
+
+          const addEdge = (from, to, createdAt) => {
+            edges.push({ from, to, createdAt });
+          };
+
+          resize();
+          window.addEventListener("resize", resize);
+
+          const genesisCount = 3;
+          for (let i = 0; i < genesisCount; i++) {
+            const gx = cx() + (i - (genesisCount - 1) / 2) * 88 + (Math.random() - 0.5) * 22;
+            const gy = h * 0.22 + (Math.random() - 0.5) * 14;
+            const idx = addNode(gx, gy);
+            tips.push(idx);
+          }
+          nextSpawnAt = spawnEveryMs;
+
+          const spawnNode = (now) => {
+            const i = nodes.length;
+            const prog = clamp01((i - genesisCount) / Math.max(1, (maxNodes - genesisCount - 1)));
+            const yBase = h * 0.26 + prog * (h * 0.52);
+            const xBase = cx() + (Math.random() - 0.5) * (w * 0.52);
+            const idx = addNode(xBase, yBase);
+
+            const p1 = pick(tips, null);
+            let p2 = null;
+            if (Math.random() < 0.65 && tips.length > 1) {
+              p2 = pick(tips, p1);
+            }
+
+            [p1, p2].filter((p) => p !== null && p !== undefined).forEach((p) => {
+              addEdge(p, idx, now);
+              tips = tips.filter((t) => t !== p);
+            });
+            tips.push(idx);
+            if (tips.length > 7) tips = tips.slice(tips.length - 7);
+          };
+
+          const tick = (t) => {
+            ctx.clearRect(0, 0, w, h);
+            const now = t;
+
+            while (now - startAt >= nextSpawnAt && nodes.length < maxNodes) {
+              spawnNode(now);
+              nextSpawnAt += spawnEveryMs;
+            }
+
+            for (let i = 0; i < edges.length; i++) {
+              const e = edges[i];
+              const a = nodes[e.from];
+              const b = nodes[e.to];
+              if (!a || !b) continue;
+
+              const p = clamp01((now - e.createdAt) / edgeDrawMs);
+              const k = ease(p);
+
+              const ajx = Math.sin(now * 0.00115 + a.p) * a.ax;
+              const ajy = Math.cos(now * 0.00105 + a.p) * a.ay;
+              const bjx = Math.sin(now * 0.00118 + b.p) * b.ax;
+              const bjy = Math.cos(now * 0.00108 + b.p) * b.ay;
+
+              const x1 = a.x + ajx;
+              const y1 = a.y + ajy;
+              const x2 = b.x + bjx;
+              const y2 = b.y + bjy;
+              const xe = x1 + (x2 - x1) * k;
+              const ye = y1 + (y2 - y1) * k;
+
+              ctx.lineWidth = 1.6;
+              ctx.strokeStyle = `rgba(73, 234, 203, ${0.07 + k * 0.16})`;
+              ctx.beginPath();
+              ctx.moveTo(x1, y1);
+              ctx.lineTo(xe, ye);
+              ctx.stroke();
+
+              ctx.lineWidth = 0.9;
+              ctx.strokeStyle = `rgba(112, 199, 186, ${0.05 + k * 0.10})`;
+              ctx.beginPath();
+              ctx.moveTo(x1, y1);
+              ctx.lineTo(xe, ye);
+              ctx.stroke();
+
+              ctx.fillStyle = `rgba(73, 234, 203, ${0.08 + k * 0.14})`;
+              ctx.beginPath();
+              ctx.arc(xe, ye, 2.0, 0, Math.PI * 2);
+              ctx.fill();
+            }
+
+            for (let i = 0; i < nodes.length; i++) {
+              const n = nodes[i];
+              const jx = Math.sin(now * 0.00115 + n.p) * n.ax;
+              const jy = Math.cos(now * 0.00105 + n.p) * n.ay;
+              const x = n.x + jx;
+              const y = n.y + jy;
+              n.el.style.left = `${x}px`;
+              n.el.style.top = `${y}px`;
+              n.el.style.animationDelay = `${Math.round(n.p * 100)}ms`;
+            }
+
+            actionRaf = window.requestAnimationFrame(tick);
+          };
+
+          actionRaf = window.requestAnimationFrame(tick);
+
+          return () => {
+            try {
+              window.cancelAnimationFrame(actionRaf);
+            } catch (_) {}
+            try {
+              window.removeEventListener("resize", resize);
+            } catch (_) {}
+            try {
+              actionNodesEl.innerHTML = "";
+            } catch (_) {}
+          };
+        }
+
+        function showActionOverlay({ title, sub, theme }) {
+          if (!actionOverlayEl) return;
+          actionOpen = true;
+          actionOverlayEl.classList.add("actionOverlayOpen");
+          actionOverlayEl.setAttribute("aria-hidden", "false");
+
+          const logoSrc = theme === "kaspa" ? "assets/kaspa.svg" : "assets/kat.svg";
+          if (actionLogoEl) actionLogoEl.src = logoSrc;
+          if (actionTitleEl) actionTitleEl.textContent = title || "Working…";
+          if (actionSubEl) actionSubEl.textContent = sub || "";
+
+          try {
+            if (actionCleanup) actionCleanup();
+          } catch (_) {}
+          actionCleanup = startActionDagAnimation({ logoSrc });
+        }
+
+        if (actionCloseEl) {
+          actionCloseEl.addEventListener("click", () => {
+            hideActionOverlay();
+          });
+        }
 
         function updateSendPrivUi() {
           if (!sendPrivEl) return;
@@ -595,65 +838,25 @@
           if (walletOverviewPanelEl) walletOverviewPanelEl.style.display = isOverview ? "block" : "none";
           if (walletManagePanelEl) walletManagePanelEl.style.display = isManage ? "block" : "none";
           if (walletAdvancedPanelEl) walletAdvancedPanelEl.style.display = isAdvanced ? "block" : "none";
+
+          if (walletShellEl) walletShellEl.classList.toggle("walletShellOverview", isOverview);
         }
 
-        if (walletTabOverviewEl) walletTabOverviewEl.addEventListener("click", () => setWalletTab("overview"));
+        function syncWalletHeroBalance() {
+          if (!walletHeroBalanceEl || !walletBalanceEl) return;
+          const t = String(walletBalanceEl.textContent || "—").trim();
+          walletHeroBalanceEl.textContent = t || "—";
+        }
+
+        if (walletTabOverviewEl) walletTabOverviewEl.addEventListener("click", () => {
+          setWalletTab("overview");
+          syncWalletHeroBalance();
+        });
         if (walletTabManageEl) walletTabManageEl.addEventListener("click", () => setWalletTab("manage"));
         if (walletTabAdvancedEl) walletTabAdvancedEl.addEventListener("click", () => setWalletTab("advanced"));
 
         setWalletTab("overview");
-
-        function setActivePage(name) {
-          const isWallet = name === "wallet";
-          const isTransfer = name === "transfer";
-          const isStudio = name === "studio";
-          if (pageWalletEl) pageWalletEl.className = `page ${isWallet ? "pageActive" : ""}`.trim();
-          if (pageTransferEl) pageTransferEl.className = `page ${isTransfer ? "pageActive" : ""}`.trim();
-          if (pageStudioEl) pageStudioEl.className = `page ${isStudio ? "pageActive" : ""}`.trim();
-          if (navWalletEl) navWalletEl.className = `navBtn ${isWallet ? "navBtnActive" : ""}`.trim();
-          if (navTransferEl) navTransferEl.className = `navBtn ${isTransfer ? "navBtnActive" : ""}`.trim();
-          if (navStudioEl) navStudioEl.className = `navBtn ${isStudio ? "navBtnActive" : ""}`.trim();
-          if (pageTitleEl) pageTitleEl.textContent = isWallet ? "Wallet" : isStudio ? "Studio" : "Transfer";
-        }
-
-        function setActiveTransferTab(name) {
-          const isSend = name === "send";
-          if (tabSendEl) tabSendEl.className = `tabBtn ${isSend ? "tabBtnActive" : ""}`.trim();
-          if (tabReceiveEl) tabReceiveEl.className = `tabBtn ${!isSend ? "tabBtnActive" : ""}`.trim();
-          if (transferSendPanelEl) transferSendPanelEl.style.display = isSend ? "block" : "none";
-          if (transferReceivePanelEl) transferReceivePanelEl.style.display = isSend ? "none" : "block";
-        }
-
-        if (navWalletEl) navWalletEl.addEventListener("click", () => setActivePage("wallet"));
-        if (navTransferEl) navTransferEl.addEventListener("click", () => setActivePage("transfer"));
-        if (navStudioEl) navStudioEl.addEventListener("click", () => setActivePage("studio"));
-        if (tabSendEl) tabSendEl.addEventListener("click", () => setActiveTransferTab("send"));
-        if (tabReceiveEl) tabReceiveEl.addEventListener("click", () => setActiveTransferTab("receive"));
-
-        setActivePage("transfer");
-        setActiveTransferTab("send");
-
-        await refreshNodeBundleDir();
-
-        function setStudioTab(name) {
-          const isAudio = name === "audio";
-          if (studioTabAudioEl) studioTabAudioEl.className = `tabBtn ${isAudio ? "tabBtnActive" : ""}`.trim();
-          if (studioTabVideoEl) studioTabVideoEl.className = `tabBtn ${!isAudio ? "tabBtnActive" : ""}`.trim();
-          if (studioAudioPanelEl) studioAudioPanelEl.style.display = isAudio ? "block" : "none";
-          if (studioVideoPanelEl) studioVideoPanelEl.style.display = isAudio ? "none" : "block";
-        }
-
-        if (studioTabAudioEl) studioTabAudioEl.addEventListener("click", () => setStudioTab("audio"));
-        if (studioTabVideoEl) studioTabVideoEl.addEventListener("click", () => setStudioTab("video"));
-        setStudioTab("audio");
-
-        function buildFullPath() {
-          const base = walletBasePathEl.value.trim();
-          const chain = String(walletChainEl.value || "0").trim();
-          const idx = String(walletAddrIndexEl.value || "0").trim();
-          if (!base) return "";
-          return `${base}/${chain}/${idx}`;
-        }
+        syncWalletHeroBalance();
 
         async function refreshWalletStatus() {
           try {
@@ -1414,41 +1617,52 @@
                     label: "Send",
                     primary: true,
                     onClick: async () => {
-                      if (studioAudioStatusEl) studioAudioStatusEl.textContent = "Sending…";
-                      const ts = new Date().toISOString().replace(/[:.]/g, "-");
-                      const ext = (studioAudioBlob.type || "").includes("ogg") ? "ogg" : "webm";
-                      const fileName = `kat_audio_${ts}.${ext}`;
-                      const fileB64 = await readBlobDataUrl(studioAudioBlob);
-                      const txid = await tauri.invoke("wallet_send_file_b64", {
-                        window: null,
-                        accountId: null,
-                        fileB64,
-                        toAddress,
-                        amountKas,
-                        rpcUrl,
-                        resumeFrom: null,
-                        resumeOutputIndex: 1,
-                        fileName,
-                        fromPrivateKey,
-                      });
+                      let overlayWasShown = false;
                       try {
-                        sendTxidEl.textContent = String(txid);
-                        recvTxEl.value = String(txid);
-                        sendProgressEl.textContent = "Done";
-                        setRing(sendRingEl, 1);
-                      } catch (_) {}
-                      if (studioAudioStatusEl) studioAudioStatusEl.textContent = "Sent";
-                      showModal({
-                        title: "Send complete",
-                        body: `Transaction ID:\n${String(txid)}`,
-                        actions: [
-                          { label: "OK", primary: true },
-                          {
-                            label: "Open in Explorer",
-                            onClick: async () => openExternal(getExplorerTxUrl(String(txid))),
-                          },
-                        ],
-                      });
+                        showActionOverlay({ title: "Publishing…", sub: "Submitting recording to the DAG", theme: "project" });
+                        overlayWasShown = true;
+                        if (studioAudioStatusEl) studioAudioStatusEl.textContent = "Sending…";
+                        const ts = new Date().toISOString().replace(/[:.]/g, "-");
+                        const ext = (studioAudioBlob.type || "").includes("ogg") ? "ogg" : "webm";
+                        const fileName = `kat_audio_${ts}.${ext}`;
+                        const fileB64 = await readBlobDataUrl(studioAudioBlob);
+                        const txid = await tauri.invoke("wallet_send_file_b64", {
+                          window: null,
+                          accountId: null,
+                          fileB64,
+                          toAddress,
+                          amountKas,
+                          rpcUrl,
+                          resumeFrom: null,
+                          resumeOutputIndex: 1,
+                          fileName,
+                          fromPrivateKey,
+                        });
+                        try {
+                          sendTxidEl.textContent = String(txid);
+                          recvTxEl.value = String(txid);
+                          sendProgressEl.textContent = "Done";
+                          setRing(sendRingEl, 1);
+                        } catch (_) {}
+                        if (studioAudioStatusEl) studioAudioStatusEl.textContent = "Sent";
+                        if (overlayWasShown) {
+                          hideActionOverlay();
+                          overlayWasShown = false;
+                        }
+                        showModal({
+                          title: "Send complete",
+                          body: `Transaction ID:\n${String(txid)}`,
+                          actions: [
+                            { label: "OK", primary: true },
+                            {
+                              label: "Open in Explorer",
+                              onClick: async () => openExternal(getExplorerTxUrl(String(txid))),
+                            },
+                          ],
+                        });
+                      } finally {
+                        if (overlayWasShown) hideActionOverlay();
+                      }
                     },
                   },
                   { label: "Cancel" },
@@ -1588,40 +1802,51 @@
                     label: "Send",
                     primary: true,
                     onClick: async () => {
-                      if (studioVideoStatusEl) studioVideoStatusEl.textContent = "Sending…";
-                      const ts = new Date().toISOString().replace(/[:.]/g, "-");
-                      const fileName = `kat_video_${ts}.webm`;
-                      const fileB64 = await readBlobDataUrl(studioVideoBlob);
-                      const txid = await tauri.invoke("wallet_send_file_b64", {
-                        window: null,
-                        accountId: null,
-                        fileB64,
-                        toAddress,
-                        amountKas,
-                        rpcUrl,
-                        resumeFrom: null,
-                        resumeOutputIndex: 1,
-                        fileName,
-                        fromPrivateKey,
-                      });
+                      let overlayWasShown = false;
                       try {
-                        sendTxidEl.textContent = String(txid);
-                        recvTxEl.value = String(txid);
-                        sendProgressEl.textContent = "Done";
-                        setRing(sendRingEl, 1);
-                      } catch (_) {}
-                      if (studioVideoStatusEl) studioVideoStatusEl.textContent = "Sent";
-                      showModal({
-                        title: "Send complete",
-                        body: `Transaction ID:\n${String(txid)}`,
-                        actions: [
-                          { label: "OK", primary: true },
-                          {
-                            label: "Open in Explorer",
-                            onClick: async () => openExternal(getExplorerTxUrl(String(txid))),
-                          },
-                        ],
-                      });
+                        showActionOverlay({ title: "Publishing…", sub: "Submitting recording to the DAG", theme: "project" });
+                        overlayWasShown = true;
+                        if (studioVideoStatusEl) studioVideoStatusEl.textContent = "Sending…";
+                        const ts = new Date().toISOString().replace(/[:.]/g, "-");
+                        const fileName = `kat_video_${ts}.webm`;
+                        const fileB64 = await readBlobDataUrl(studioVideoBlob);
+                        const txid = await tauri.invoke("wallet_send_file_b64", {
+                          window: null,
+                          accountId: null,
+                          fileB64,
+                          toAddress,
+                          amountKas,
+                          rpcUrl,
+                          resumeFrom: null,
+                          resumeOutputIndex: 1,
+                          fileName,
+                          fromPrivateKey,
+                        });
+                        try {
+                          sendTxidEl.textContent = String(txid);
+                          recvTxEl.value = String(txid);
+                          sendProgressEl.textContent = "Done";
+                          setRing(sendRingEl, 1);
+                        } catch (_) {}
+                        if (studioVideoStatusEl) studioVideoStatusEl.textContent = "Sent";
+                        if (overlayWasShown) {
+                          hideActionOverlay();
+                          overlayWasShown = false;
+                        }
+                        showModal({
+                          title: "Send complete",
+                          body: `Transaction ID:\n${String(txid)}`,
+                          actions: [
+                            { label: "OK", primary: true },
+                            {
+                              label: "Open in Explorer",
+                              onClick: async () => openExternal(getExplorerTxUrl(String(txid))),
+                            },
+                          ],
+                        });
+                      } finally {
+                        if (overlayWasShown) hideActionOverlay();
+                      }
                     },
                   },
                   { label: "Cancel" },
@@ -1669,6 +1894,30 @@
           });
         }
 
+        function buildFullPath() {
+          const base = String(walletBasePathEl?.value || "").trim();
+          const chain = String(walletChainEl?.value || "").trim();
+          const indexRaw = String(walletAddrIndexEl?.value || "").trim();
+          const idx = Number(indexRaw);
+
+          if (!base) {
+            setError("Enter a base derivation path.");
+            return "";
+          }
+          if (!base.startsWith("m/")) {
+            setError("Base path must start with m/ (example: m/44'/111111'/0')");
+            return "";
+          }
+          if (!Number.isFinite(idx) || idx < 0 || !Number.isInteger(idx)) {
+            setError("Index must be a non-negative integer.");
+            return "";
+          }
+
+          const cleanedBase = base.replace(/\/+$/, "");
+          const cleanedChain = chain === "0" || chain === "1" ? chain : "0";
+          return `${cleanedBase}/${cleanedChain}/${idx}`;
+        }
+
         async function refreshWalletAddressAndBalance() {
           const path = buildFullPath();
           if (!path) return;
@@ -1685,6 +1934,7 @@
 
           try {
             walletBalanceEl.textContent = "…";
+            syncWalletHeroBalance();
             const bal = await tauri.invoke("wallet_get_balance", {
               network,
               derivationPath: path,
@@ -1692,8 +1942,10 @@
             });
             const b = Number(bal);
             walletBalanceEl.textContent = Number.isFinite(b) ? b.toFixed(8) : "—";
+            syncWalletHeroBalance();
           } catch (_) {
             walletBalanceEl.textContent = "—";
+            syncWalletHeroBalance();
           }
 
           try {
@@ -1723,6 +1975,9 @@
             setError(String(e));
           }
         }
+
+        await refreshProfiles();
+        await refreshWalletStatus();
 
         walletRefreshBtnEl.addEventListener("click", async () => {
           setError("");
@@ -1839,62 +2094,43 @@
           });
         }
 
-        walletImportMnemonicBtnEl.addEventListener("click", async () => {
-          setError("");
-          try {
-            const username = walletImportUsernameEl.value.trim();
-            const password = walletImportPasswordEl.value;
-            const phrase = walletImportMnemonicEl.value.trim().replace(/\s+/g, " ");
-            const mnemonicPassword = walletMnemonicPassEl.value.trim();
-            await tauri.invoke("wallet_profile_import_mnemonic", {
-              username,
-              password,
-              phrase,
-              mnemonicPassword: mnemonicPassword || null,
-            });
-            await refreshProfiles();
-            showModal({
-              title: "Imported",
-              body: "Mnemonic profile imported.",
-              actions: [{ label: "OK", primary: true }],
-            });
-          } catch (e) {
-            setError(String(e));
-          }
-        });
-
-        walletImportPrivKeyBtnEl.addEventListener("click", async () => {
-          setError("");
-          try {
-            const username = walletImportUsernameEl.value.trim();
-            const password = walletImportPasswordEl.value;
-            const privateKeyHex = walletImportPrivKeyEl.value.trim();
-            await tauri.invoke("wallet_profile_import_private_key", {
-              username,
-              password,
-              privateKeyHex,
-            });
-            await refreshProfiles();
-            showModal({
-              title: "Imported",
-              body: "Private key profile imported.",
-              actions: [{ label: "OK", primary: true }],
-            });
-          } catch (e) {
-            setError(String(e));
-          }
-        });
-
         walletUnlockBtnEl.addEventListener("click", async () => {
           setError("");
           try {
             const username = walletProfileSelectEl.value.trim();
             const password = walletPasswordEl.value;
+
             await tauri.invoke("wallet_unlock", { username, password });
             await refreshWalletStatus();
             await refreshWalletAddressAndBalance();
+            try {
+              document.getElementById("walletFsClose")?.click();
+            } catch (_) {
+              // ignore
+            }
+            showModal({
+              title: "Unlocked",
+              body: username ? `Wallet unlocked for profile "${username}".` : "Wallet unlocked.",
+              actions: [{ label: "OK", primary: true }],
+            });
           } catch (e) {
             setError(String(e));
+            try {
+              document.getElementById("walletFsClose")?.click();
+            } catch (_) {
+              // ignore
+            }
+            const msg = String(e || "");
+            const lower = msg.toLowerCase();
+            const hint =
+              lower.includes("password") || lower.includes("invalid") || lower.includes("decrypt")
+                ? "Incorrect password (or invalid profile)."
+                : "Unable to unlock wallet.";
+            showModal({
+              title: "Unlock failed",
+              body: msg ? `${hint}\n\n${msg}` : hint,
+              actions: [{ label: "OK", primary: true }],
+            });
           }
         });
 
@@ -1905,8 +2141,23 @@
             walletPasswordEl.value = "";
             walletProfileSelectEl.value = "";
             await refreshWalletStatus();
+            try {
+              document.getElementById("walletFsClose")?.click();
+            } catch (_) {
+              // ignore
+            }
+            showModal({
+              title: "Locked",
+              body: "Wallet successfully locked.",
+              actions: [{ label: "OK", primary: true }],
+            });
           } catch (e) {
             setError(String(e));
+            showModal({
+              title: "Lock failed",
+              body: String(e || "Unable to lock wallet."),
+              actions: [{ label: "OK", primary: true }],
+            });
           }
         });
 
@@ -1939,7 +2190,10 @@
 
         walletSendKasBtnEl.addEventListener("click", async () => {
           setError("");
+          let overlayWasShown = false;
           try {
+            showActionOverlay({ title: "Sending…", sub: "Broadcasting transaction to the DAG", theme: "kaspa" });
+            overlayWasShown = true;
             const network = walletNetworkEl.value;
             const rpcUrl = walletRpcUrlEl.value.trim();
             const derivationPath = buildFullPath();
@@ -1971,6 +2225,10 @@
               amountKas,
             });
             walletSendKasTxidEl.textContent = String(txid);
+            if (overlayWasShown) {
+              hideActionOverlay();
+              overlayWasShown = false;
+            }
             showModal({
               title: "Send complete",
               body: `Transaction ID:\n${String(txid)}`,
@@ -1987,6 +2245,12 @@
           } catch (e) {
             walletSendKasTxidEl.textContent = "—";
             setError(String(e));
+            if (overlayWasShown) {
+              hideActionOverlay();
+              overlayWasShown = false;
+            }
+          } finally {
+            if (overlayWasShown) hideActionOverlay();
           }
         });
 
@@ -2001,155 +2265,79 @@
           }
         });
 
-        await refreshProfiles();
-        await refreshWalletStatus();
+        function setPickedFile(file) {
+          selectedSendFile = file || null;
 
-        async function showStartupWalletModal() {
-          const stored = localStorage.getItem("kat_show_startup_wallet_modal");
-          if (stored === "0") return;
-
-          let unlocked = null;
-          try {
-            unlocked = await tauri.invoke("wallet_unlocked_username", {});
-          } catch (_) {
-            unlocked = null;
+          if (!sendFileHintEl) return;
+          if (selectedSendFile && selectedSendFile.name) {
+            sendFileHintEl.textContent = `Selected: ${selectedSendFile.name}`;
+          } else {
+            sendFileHintEl.textContent = "Tip: drag & drop a file here.";
           }
-          if (unlocked) return;
-
-          let profiles = [];
-          try {
-            profiles = (await tauri.invoke("wallet_profiles_list", {})) || [];
-          } catch (_) {
-            profiles = [];
-          }
-
-          const hasProfiles = Array.isArray(profiles) && profiles.length > 0;
-          const title = hasProfiles ? "Welcome back" : "Welcome";
-          const body = hasProfiles
-            ? "Choose how to continue:\n\n- Unlock an existing wallet profile\n- Create a new wallet profile\n- Import from mnemonic or private key\n\nYou can also continue without a wallet."
-            : "Let’s set up your wallet:\n\n- Create a new wallet profile\n- Import from mnemonic or private key\n\nYou can also continue without a wallet.";
-
-          const focusLater = (fn) => setTimeout(() => {
-            try {
-              fn();
-            } catch (_) {}
-          }, 50);
-
-          const goWallet = () => {
-            setActivePage("wallet");
-          };
-
-          const actions = [];
-          if (hasProfiles) {
-            actions.push({
-              label: "Unlock",
-              primary: true,
-              onClick: async () => {
-                goWallet();
-                setWalletTab("overview");
-                focusLater(() => walletPasswordEl && walletPasswordEl.focus());
-              },
-            });
-          }
-
-          actions.push({
-            label: "Create wallet",
-            primary: !hasProfiles,
-            onClick: async () => {
-              goWallet();
-              setWalletTab("manage");
-              focusLater(() => walletNewUsernameEl && walletNewUsernameEl.focus());
-            },
-          });
-
-          actions.push({
-            label: "Import wallet",
-            onClick: async () => {
-              goWallet();
-              setWalletTab("manage");
-              focusLater(() => walletImportUsernameEl && walletImportUsernameEl.focus());
-            },
-          });
-
-          actions.push({
-            label: "Don’t show again",
-            onClick: async () => {
-              localStorage.setItem("kat_show_startup_wallet_modal", "0");
-            },
-          });
-
-          actions.push({ label: "Continue" });
-
-          showModal({ title, body, actions });
         }
 
-        await showStartupWalletModal();
-
-        // Prevent default browser behavior (opening the file / navigation) on drop.
-        window.addEventListener("dragover", (e) => e.preventDefault());
-        window.addEventListener("drop", (e) => e.preventDefault());
-
-        // Send panel drag & drop
-        if (sendDropZoneEl) {
-          const activate = () => sendDropZoneEl.classList.add("dropZoneActive");
-          const deactivate = () => sendDropZoneEl.classList.remove("dropZoneActive");
-
-          if (sendFileEl) {
-            sendFileEl.addEventListener("change", () => {
-              const f = sendFileEl.files && sendFileEl.files[0];
-              setPickedFile(f || null);
-            });
-          }
-
-          sendDropZoneEl.addEventListener("dragenter", (e) => {
-            e.preventDefault();
-            activate();
-          });
-          sendDropZoneEl.addEventListener("dragover", (e) => {
-            e.preventDefault();
-            activate();
-          });
-          sendDropZoneEl.addEventListener("dragleave", (e) => {
-            e.preventDefault();
-            deactivate();
-          });
-          sendDropZoneEl.addEventListener("drop", (e) => {
-            e.preventDefault();
-            deactivate();
-            const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-            if (f) {
-              setError("");
-              setDroppedFile(f);
-            }
-          });
+        function setDroppedFile(file) {
+          setPickedFile(file);
         }
 
-        if (eventApi?.listen) {
-          await eventApi.listen("kaspa_send_progress", (ev) => {
-            const p = ev?.payload || {};
-            const done = Number(p.submitted_chunks || 0);
-            const total = p.total_chunks == null ? null : Number(p.total_chunks);
-            if (total && total > 0) {
-              sendProgressEl.textContent = `${done}/${total}`;
-              setRing(sendRingEl, done / total);
-            } else {
-              sendProgressEl.textContent = `${done}`;
-              setRing(sendRingEl, 0);
-            }
-          });
+        function clearSession() {
+          setError("");
 
-          await eventApi.listen("kaspa_receive_progress", (ev) => {
-            const p = ev?.payload || {};
-            const found = Number(p.found_chunks || 0);
-            const total = p.total_chunks == null ? null : Number(p.total_chunks);
-            if (total && total > 0) {
-              recvStatusEl.textContent = `${found}/${total}`;
-              setRing(recvRingEl, found / total);
-            } else {
-              recvStatusEl.textContent = `${found}`;
-              setRing(recvRingEl, 0);
-            }
-          });
+          try {
+            closeModal();
+          } catch (_) {}
+
+          try {
+            setPickedFile(null);
+          } catch (_) {}
+          try {
+            if (sendFileEl) sendFileEl.value = "";
+          } catch (_) {}
+
+          try {
+            if (sendProgressEl) sendProgressEl.textContent = "Idle";
+            if (sendTxidEl) sendTxidEl.textContent = "—";
+            setRing(sendRingEl, 0);
+          } catch (_) {}
+
+          try {
+            if (sendToEl) sendToEl.value = "";
+            if (sendAmountEl) sendAmountEl.value = "0";
+            clearKnsPreview(sendToResolvedEl);
+          } catch (_) {}
+
+          try {
+            if (recvStatusEl) recvStatusEl.textContent = "Idle";
+            setRing(recvRingEl, 0);
+            if (recvTxEl) recvTxEl.value = "";
+            if (recvStartEl) recvStartEl.value = "";
+            if (recvOutEl) recvOutEl.value = "";
+            lastReceivedPath = "";
+          } catch (_) {}
+
+          try {
+            stopStudioAudio();
+          } catch (_) {}
+          try {
+            stopStudioVideo();
+          } catch (_) {}
+          try {
+            clearStudioAudioTake();
+          } catch (_) {}
+          try {
+            clearStudioVideoTake();
+          } catch (_) {}
+
+          try {
+            if (studioAudioToEl) studioAudioToEl.value = "";
+            if (studioAudioAmountEl) studioAudioAmountEl.value = "0";
+            clearKnsPreview(studioAudioToResolvedEl);
+          } catch (_) {}
+          try {
+            if (studioVideoToEl) studioVideoToEl.value = "";
+            if (studioVideoAmountEl) studioVideoAmountEl.value = "0";
+            clearKnsPreview(studioVideoToResolvedEl);
+          } catch (_) {}
         }
 
         sendBtn.addEventListener("click", async () => {
@@ -2194,7 +2382,10 @@
             return;
           }
 
+          let overlayWasShown = false;
           try {
+            showActionOverlay({ title: "Publishing…", sub: "Building and submitting chunks to the DAG", theme: "project" });
+            overlayWasShown = true;
             const fileB64 = await readFileB64(f);
             const txid = await tauri.invoke("wallet_send_file_b64", {
               window: null,
@@ -2213,6 +2404,10 @@
             sendProgressEl.textContent = "Done";
             setRing(sendRingEl, 1);
 
+            if (overlayWasShown) {
+              hideActionOverlay();
+              overlayWasShown = false;
+            }
             showModal({
               title: "Send complete",
               body: `Transaction ID:\n${txid}\n\nNext: open the explorer transaction and copy the first value under \"Block hashes\" to use as a scan anchor for receive.`
@@ -2236,6 +2431,8 @@
               body: String(e),
               actions: [{ label: "Close", primary: true }],
             });
+          } finally {
+            if (overlayWasShown) hideActionOverlay();
           }
         });
 
@@ -2369,5 +2566,188 @@
         });
       }
 
-      init();
-    
+      function startSplash() {
+        return new Promise((resolve) => {
+          const splashEl = document.getElementById("splash");
+          const splashCanvasEl = document.getElementById("splashCanvas");
+          const splashNodesEl = document.getElementById("splashNodes");
+          if (!splashEl || !splashCanvasEl || !splashNodesEl) {
+            resolve();
+            return;
+          }
+
+          splashEl.classList.remove("splashFade");
+          splashEl.setAttribute("aria-hidden", "false");
+
+          const ctx = splashCanvasEl.getContext("2d");
+          if (!ctx) {
+            setTimeout(() => {
+              splashEl.classList.add("splashFade");
+              splashEl.setAttribute("aria-hidden", "true");
+              resolve();
+            }, 6000);
+            return;
+          }
+
+          const dpr = Math.max(1, window.devicePixelRatio || 1);
+          const nodes = [];
+          const edges = [];
+          let tips = [];
+          let w = 0;
+          let h = 0;
+          let raf = 0;
+
+          const maxNodes = 26;
+          const spawnEveryMs = 240;
+          const edgeDrawMs = 520;
+          const startAt = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+          let nextSpawnAt = 0;
+
+          const clamp01 = (x) => Math.max(0, Math.min(1, x));
+          const ease = (x) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
+          const pick = (arr, exclude) => {
+            const a = (arr || []).filter((v) => v !== exclude);
+            if (a.length === 0) return null;
+            return a[Math.floor(Math.random() * a.length)];
+          };
+
+          const resize = () => {
+            const rect = splashEl.getBoundingClientRect();
+            w = Math.max(1, Math.floor(rect.width));
+            h = Math.max(1, Math.floor(rect.height));
+            splashCanvasEl.width = Math.floor(w * dpr);
+            splashCanvasEl.height = Math.floor(h * dpr);
+            splashCanvasEl.style.width = `${w}px`;
+            splashCanvasEl.style.height = `${h}px`;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          };
+
+          const cx = () => w * 0.5;
+
+          const nodeSvg = `
+            <svg width="46" height="46" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+              <path d="M11 1.6L19.2 6.4V15.6L11 20.4L2.8 15.6V6.4L11 1.6Z" stroke="var(--kaspa-primary)" stroke-width="1.8" stroke-linejoin="round" />
+              <path d="M4.9 11H7.2L8.4 8.1L10.1 14.2L11.5 10.3L12.6 12.7H14.9" stroke="var(--kaspa-accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          `;
+
+          const addNode = (x, y) => {
+            const el = document.createElement("div");
+            el.className = "splashNode";
+            el.innerHTML = nodeSvg;
+            splashNodesEl.appendChild(el);
+            const n = {
+              x,
+              y,
+              el,
+              p: Math.random() * Math.PI * 2,
+              ax: 4 + Math.random() * 8,
+              ay: 3 + Math.random() * 7,
+            };
+            nodes.push(n);
+            return nodes.length - 1;
+          };
+
+          const addEdge = (from, to, createdAt) => {
+            edges.push({ from, to, createdAt });
+          };
+
+          const spawnNode = (now) => {
+            const i = nodes.length;
+            const prog = clamp01((i - 3) / Math.max(1, (maxNodes - 4)));
+            const yBase = h * 0.22 + prog * (h * 0.56);
+            const xBase = cx() + (Math.random() - 0.5) * (w * 0.56);
+            const idx = addNode(xBase, yBase);
+
+            const p1 = pick(tips, null);
+            let p2 = null;
+            if (Math.random() < 0.7 && tips.length > 1) p2 = pick(tips, p1);
+
+            [p1, p2].filter((p) => p !== null && p !== undefined).forEach((p) => {
+              addEdge(p, idx, now);
+              tips = tips.filter((t) => t !== p);
+            });
+            tips.push(idx);
+            if (tips.length > 7) tips = tips.slice(tips.length - 7);
+          };
+
+          resize();
+          window.addEventListener("resize", resize);
+
+          for (let i = 0; i < 3; i++) {
+            const gx = cx() + (i - 1) * 90 + (Math.random() - 0.5) * 20;
+            const gy = h * 0.18 + (Math.random() - 0.5) * 16;
+            const idx = addNode(gx, gy);
+            tips.push(idx);
+          }
+          nextSpawnAt = spawnEveryMs;
+
+          const tick = (t) => {
+            ctx.clearRect(0, 0, w, h);
+            const now = t;
+
+            while (now - startAt >= nextSpawnAt && nodes.length < maxNodes) {
+              spawnNode(now);
+              nextSpawnAt += spawnEveryMs;
+            }
+
+            for (let i = 0; i < edges.length; i++) {
+              const e = edges[i];
+              const a = nodes[e.from];
+              const b = nodes[e.to];
+              if (!a || !b) continue;
+
+              const p = clamp01((now - e.createdAt) / edgeDrawMs);
+              const k = ease(p);
+
+              const ajx = Math.sin(now * 0.00115 + a.p) * a.ax;
+              const ajy = Math.cos(now * 0.00105 + a.p) * a.ay;
+              const bjx = Math.sin(now * 0.00118 + b.p) * b.ax;
+              const bjy = Math.cos(now * 0.00108 + b.p) * b.ay;
+
+              const x1 = a.x + ajx;
+              const y1 = a.y + ajy;
+              const x2 = b.x + bjx;
+              const y2 = b.y + bjy;
+              const xe = x1 + (x2 - x1) * k;
+              const ye = y1 + (y2 - y1) * k;
+
+              ctx.lineWidth = 1.7;
+              ctx.strokeStyle = `rgba(73, 234, 203, ${0.06 + k * 0.18})`;
+              ctx.beginPath();
+              ctx.moveTo(x1, y1);
+              ctx.lineTo(xe, ye);
+              ctx.stroke();
+            }
+
+            for (let i = 0; i < nodes.length; i++) {
+              const n = nodes[i];
+              const jx = Math.sin(now * 0.00115 + n.p) * n.ax;
+              const jy = Math.cos(now * 0.00105 + n.p) * n.ay;
+              const x = n.x + jx;
+              const y = n.y + jy;
+              n.el.style.left = `${x}px`;
+              n.el.style.top = `${y}px`;
+              n.el.style.animationDelay = `${Math.round(n.p * 100)}ms`;
+            }
+
+            raf = window.requestAnimationFrame(tick);
+          };
+
+          raf = window.requestAnimationFrame(tick);
+
+          setTimeout(() => {
+            try {
+              window.cancelAnimationFrame(raf);
+            } catch (_) {}
+            try {
+              window.removeEventListener("resize", resize);
+            } catch (_) {}
+            splashEl.classList.add("splashFade");
+            splashEl.setAttribute("aria-hidden", "true");
+            resolve();
+          }, 6000);
+        });
+      }
+
+      startSplash().then(init).catch(() => init());

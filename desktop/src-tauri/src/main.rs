@@ -15,6 +15,8 @@ use std::io::{BufRead, Read};
 use std::os::windows::process::CommandExt;
 
 use base64::{engine::general_purpose, Engine as _};
+use qrcode::render::svg;
+use qrcode::QrCode;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tauri::Window;
@@ -290,6 +292,23 @@ fn wallet_unlocked_username() -> Result<Option<String>, String> {
 #[tauri::command(rename_all = "camelCase")]
 fn wallet_derive_receive_address(network: String, derivation_path: String) -> Result<String, String> {
     wallet_vault::derive_receive_address(&network, &derivation_path)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn wallet_qr_svg(data: String) -> Result<String, String> {
+    let d = data.trim();
+    if d.is_empty() {
+        return Err("data is empty".to_string());
+    }
+
+    let code = QrCode::new(d.as_bytes()).map_err(|e| e.to_string())?;
+    let out = code
+        .render::<svg::Color>()
+        .min_dimensions(240, 240)
+        .dark_color(svg::Color("#000000"))
+        .light_color(svg::Color("#ffffff"))
+        .build();
+    Ok(out)
 }
 
 #[tauri::command]
@@ -1325,6 +1344,7 @@ fn main() {
             wallet_lock,
             wallet_unlocked_username,
             wallet_derive_receive_address,
+            wallet_qr_svg,
             wallet_debug_unlocked_material_fingerprint,
             wallet_get_balance,
             wallet_send_kas,

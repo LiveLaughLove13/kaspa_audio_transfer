@@ -16,6 +16,7 @@ zeroize = { version = "1.6", features = ["derive"] }
 tokio = { version = "1.33.0", features = ["time", "rt-multi-thread", "macros"] }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 urlencoding = "2.1"
+qrcode = { version = "0.11", default-features = false, features = ["svg"] }
 kaspa-wallet-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
 kaspa-wallet-keys = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
 kaspa-bip32 = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
