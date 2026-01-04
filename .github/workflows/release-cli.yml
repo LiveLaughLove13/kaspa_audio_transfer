@@ -1,0 +1,58 @@
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build CLI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_suffix: linux-x86_64
+            bin_ext: ""
+          - os: windows-latest
+            artifact_suffix: windows-x86_64
+            bin_ext: ".exe"
+          - os: macos-13
+            artifact_suffix: macos-x86_64
+            bin_ext: ""
+          - os: macos-latest
+            artifact_suffix: macos-aarch64
+            bin_ext: ""
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          BIN_NAME="kaspa_audio_transfer${{ matrix.bin_ext }}"
+          cp "target/release/${BIN_NAME}" "dist/kaspa_audio_transfer-${{ matrix.artifact_suffix }}${{ matrix.bin_ext }}"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/kaspa_audio_transfer-${{ matrix.artifact_suffix }}${{ matrix.bin_ext }}

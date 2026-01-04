@@ -1,0 +1,40 @@
+name: Release Desktop (Tauri)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build_windows:
+    name: Build Desktop (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install WiX Toolset (for MSI)
+        run: choco install wixtoolset -y
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version 1.6.0 --locked
+
+      - name: Build Tauri bundle
+        run: cargo tauri build --manifest-path desktop/src-tauri/Cargo.toml --bundles msi
+
+      - name: Upload bundles to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            desktop/src-tauri/target/release/bundle/msi/*.msi
