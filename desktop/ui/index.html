@@ -53,6 +53,17 @@
           <span class="headerPillLabel">Status</span>
           <span id="pillText" class="headerPillValue">Ready</span>
         </div>
+        <div class="pill headerPill headerPillWide">
+          <span class="headerPillLabel">Connected</span>
+          <span id="rpcConnText" class="headerPillValue">—</span>
+        </div>
+        <div class="pill headerPill">
+          <span class="headerPillLabel">RPC</span>
+          <span class="headerPillValue">
+            <button id="globalRpcModeLocal" class="tabBtn tabBtnActive" type="button">Local</button>
+            <button id="globalRpcModePublic" class="tabBtn" type="button">Public</button>
+          </span>
+        </div>
         <div class="pill" id="pill" style="display:none;"></div>
         <a class="btn btn-primary" href="https://github.com/liveLaughLove13" target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
@@ -264,6 +275,10 @@
                     <option value="devnet">devnet</option>
                   </select>
                   <label style="font-size:12px;color:var(--text-muted);">RPC</label>
+                  <div class="rpcMode" style="display:flex;gap:6px;align-items:center;">
+                    <button id="walletRpcModeLocal" class="tabBtn tabBtnActive" type="button" style="padding:8px 10px;border-radius:999px;">Local</button>
+                    <button id="walletRpcModePublic" class="tabBtn" type="button" style="padding:8px 10px;border-radius:999px;">Public</button>
+                  </div>
                   <input id="walletRpcUrl" type="text" value="grpc://127.0.0.1:16110" spellcheck="false" style="flex:1;min-width:220px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
                 </div>
 
@@ -449,6 +464,10 @@
                     <div id="studioAudioToResolved" class="knsPreview" style="display:none;"></div>
                     <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
                       <input id="studioAudioAmount" type="number" step="0.00000001" value="0" style="width:160px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                      <div class="rpcMode" style="display:flex;gap:6px;align-items:center;">
+                        <button id="studioAudioRpcModeLocal" class="tabBtn tabBtnActive" type="button" style="padding:8px 10px;border-radius:999px;">Local</button>
+                        <button id="studioAudioRpcModePublic" class="tabBtn" type="button" style="padding:8px 10px;border-radius:999px;">Public</button>
+                      </div>
                       <input id="studioAudioRpc" type="text" value="grpc://127.0.0.1:16110" style="flex:1;min-width:220px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
                     </div>
                   </div>
@@ -510,6 +529,10 @@
                     <div id="studioVideoToResolved" class="knsPreview" style="display:none;"></div>
                     <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
                       <input id="studioVideoAmount" type="number" step="0.00000001" value="0" style="width:160px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                      <div class="rpcMode" style="display:flex;gap:6px;align-items:center;">
+                        <button id="studioVideoRpcModeLocal" class="tabBtn tabBtnActive" type="button" style="padding:8px 10px;border-radius:999px;">Local</button>
+                        <button id="studioVideoRpcModePublic" class="tabBtn" type="button" style="padding:8px 10px;border-radius:999px;">Public</button>
+                      </div>
                       <input id="studioVideoRpc" type="text" value="grpc://127.0.0.1:16110" style="flex:1;min-width:220px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
                     </div>
                   </div>
@@ -570,6 +593,10 @@
                   </div>
                   <div style="flex:1;">
                     <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">RPC URL</label>
+                    <div class="rpcMode" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+                      <button id="sendRpcModeLocal" class="tabBtn tabBtnActive" type="button" style="padding:8px 10px;border-radius:999px;">Local</button>
+                      <button id="sendRpcModePublic" class="tabBtn" type="button" style="padding:8px 10px;border-radius:999px;">Public</button>
+                    </div>
                     <input id="sendRpc" type="text" value="grpc://127.0.0.1:16110" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
                   </div>
                 </div>
@@ -621,6 +648,10 @@
                   </div>
                   <div style="flex:1;">
                     <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">RPC URL</label>
+                    <div class="rpcMode" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+                      <button id="recvRpcModeLocal" class="tabBtn tabBtnActive" type="button" style="padding:8px 10px;border-radius:999px;">Local</button>
+                      <button id="recvRpcModePublic" class="tabBtn" type="button" style="padding:8px 10px;border-radius:999px;">Public</button>
+                    </div>
                     <input id="recvRpc" type="text" value="grpc://127.0.0.1:16110" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
                   </div>
                 </div>

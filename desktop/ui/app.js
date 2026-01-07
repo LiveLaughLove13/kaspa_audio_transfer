@@ -130,6 +130,8 @@
 
       const walletNetworkEl = document.getElementById("walletNetwork");
       const walletRpcUrlEl = document.getElementById("walletRpcUrl");
+      const walletRpcModeLocalEl = document.getElementById("walletRpcModeLocal");
+      const walletRpcModePublicEl = document.getElementById("walletRpcModePublic");
       const walletBasePathEl = document.getElementById("walletBasePath");
       const walletChainEl = document.getElementById("walletChain");
       const walletAddrIndexEl = document.getElementById("walletAddrIndex");
@@ -164,6 +166,7 @@
       const modalActionsEl = document.getElementById("modalActions");
 
       const pillTextEl = document.getElementById("pillText");
+      const rpcConnTextEl = document.getElementById("rpcConnText");
 
       const walletTxRefreshBtnEl = document.getElementById("walletTxRefreshBtn");
       const walletTxHistoryStatusEl = document.getElementById("walletTxHistoryStatus");
@@ -763,6 +766,201 @@
           previewEl: studioVideoToResolvedEl,
           getKnsNetwork: () => knsNetworkFromRpcUrl(studioVideoRpcEl?.value || ""),
         });
+
+        const globalRpcModeLocalEl = document.getElementById("globalRpcModeLocal");
+        const globalRpcModePublicEl = document.getElementById("globalRpcModePublic");
+
+        const sendRpcModeLocalEl = document.getElementById("sendRpcModeLocal");
+        const sendRpcModePublicEl = document.getElementById("sendRpcModePublic");
+        const recvRpcModeLocalEl = document.getElementById("recvRpcModeLocal");
+        const recvRpcModePublicEl = document.getElementById("recvRpcModePublic");
+        const studioAudioRpcModeLocalEl = document.getElementById("studioAudioRpcModeLocal");
+        const studioAudioRpcModePublicEl = document.getElementById("studioAudioRpcModePublic");
+        const studioVideoRpcModeLocalEl = document.getElementById("studioVideoRpcModeLocal");
+        const studioVideoRpcModePublicEl = document.getElementById("studioVideoRpcModePublic");
+
+        function isPublicResolverValue(v) {
+          const s = String(v || "").trim().toLowerCase();
+          return s === "public" || s === "resolver" || s.startsWith("public:") || s.startsWith("resolver:");
+        }
+
+        function setToggleActive(localBtn, publicBtn, isPublic) {
+          if (!localBtn || !publicBtn) return;
+          if (isPublic) {
+            localBtn.classList.remove("tabBtnActive");
+            publicBtn.classList.add("tabBtnActive");
+          } else {
+            publicBtn.classList.remove("tabBtnActive");
+            localBtn.classList.add("tabBtnActive");
+          }
+        }
+
+        function getGlobalRpcMode() {
+          try {
+            const v = String(localStorage.getItem("kat_rpc_mode") || "").trim().toLowerCase();
+            if (v === "public") return "public";
+          } catch (_) {}
+          return "local";
+        }
+
+        function publicValueForWallet() {
+          const n = String(walletNetworkEl?.value || "mainnet").toLowerCase();
+          if (n.includes("testnet")) return "public:tn10";
+          if (n.includes("devnet")) return "public:devnet";
+          return "public";
+        }
+
+        function applyGlobalRpcMode(mode) {
+          const m = mode === "public" ? "public" : "local";
+          setToggleActive(globalRpcModeLocalEl, globalRpcModePublicEl, m === "public");
+
+          const applyToInput = (inputEl, publicValue) => {
+            if (!inputEl) return;
+            const current = String(inputEl.value || "").trim();
+            const isPub = isPublicResolverValue(current);
+            if (m === "public") {
+              inputEl.value = publicValue;
+            } else {
+              inputEl.value = isPub || !current ? "grpc://127.0.0.1:16110" : current;
+            }
+            inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+          };
+
+          applyToInput(sendRpcEl, "public");
+          applyToInput(recvRpcEl, "public");
+          applyToInput(studioAudioRpcEl, "public");
+          applyToInput(studioVideoRpcEl, "public");
+          applyToInput(walletRpcUrlEl, publicValueForWallet());
+        }
+
+        function setGlobalRpcMode(mode) {
+          const m = mode === "public" ? "public" : "local";
+          try {
+            localStorage.setItem("kat_rpc_mode", m);
+          } catch (_) {}
+          applyGlobalRpcMode(m);
+        }
+
+        function setupRpcModeToggle({ inputEl, localBtn, publicBtn, getPublicValue, getLocalDefaultValue }) {
+          if (!inputEl || !localBtn || !publicBtn) return;
+          let lastLocal = String(inputEl.value || "").trim() || (getLocalDefaultValue ? getLocalDefaultValue() : "grpc://127.0.0.1:16110");
+
+          const refresh = () => {
+            setToggleActive(localBtn, publicBtn, isPublicResolverValue(inputEl.value));
+          };
+
+          localBtn.addEventListener("click", () => {
+            const current = String(inputEl.value || "").trim();
+            if (!isPublicResolverValue(current) && current) lastLocal = current;
+            inputEl.value = lastLocal || (getLocalDefaultValue ? getLocalDefaultValue() : "grpc://127.0.0.1:16110");
+            inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+            refresh();
+          });
+
+          publicBtn.addEventListener("click", () => {
+            const current = String(inputEl.value || "").trim();
+            if (!isPublicResolverValue(current) && current) lastLocal = current;
+            inputEl.value = getPublicValue ? getPublicValue() : "public";
+            inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+            refresh();
+          });
+
+          inputEl.addEventListener("input", refresh);
+          refresh();
+        }
+
+        setupRpcModeToggle({
+          inputEl: sendRpcEl,
+          localBtn: sendRpcModeLocalEl,
+          publicBtn: sendRpcModePublicEl,
+          getPublicValue: () => "public",
+          getLocalDefaultValue: () => "grpc://127.0.0.1:16110",
+        });
+        setupRpcModeToggle({
+          inputEl: recvRpcEl,
+          localBtn: recvRpcModeLocalEl,
+          publicBtn: recvRpcModePublicEl,
+          getPublicValue: () => "public",
+          getLocalDefaultValue: () => "grpc://127.0.0.1:16110",
+        });
+        setupRpcModeToggle({
+          inputEl: studioAudioRpcEl,
+          localBtn: studioAudioRpcModeLocalEl,
+          publicBtn: studioAudioRpcModePublicEl,
+          getPublicValue: () => "public",
+          getLocalDefaultValue: () => "grpc://127.0.0.1:16110",
+        });
+        setupRpcModeToggle({
+          inputEl: studioVideoRpcEl,
+          localBtn: studioVideoRpcModeLocalEl,
+          publicBtn: studioVideoRpcModePublicEl,
+          getPublicValue: () => "public",
+          getLocalDefaultValue: () => "grpc://127.0.0.1:16110",
+        });
+        setupRpcModeToggle({
+          inputEl: walletRpcUrlEl,
+          localBtn: walletRpcModeLocalEl,
+          publicBtn: walletRpcModePublicEl,
+          getPublicValue: () => {
+            const n = String(walletNetworkEl?.value || "mainnet").toLowerCase();
+            if (n.includes("testnet")) return "public:tn10";
+            if (n.includes("devnet")) return "public:devnet";
+            return "public";
+          },
+          getLocalDefaultValue: () => "grpc://127.0.0.1:16110",
+        });
+
+        if (walletNetworkEl && walletRpcUrlEl) {
+          walletNetworkEl.addEventListener("change", () => {
+            if (!isPublicResolverValue(walletRpcUrlEl.value)) return;
+            const n = String(walletNetworkEl.value || "mainnet").toLowerCase();
+            if (n.includes("testnet")) walletRpcUrlEl.value = "public:tn10";
+            else if (n.includes("devnet")) walletRpcUrlEl.value = "public:devnet";
+            else walletRpcUrlEl.value = "public";
+            walletRpcUrlEl.dispatchEvent(new Event("input", { bubbles: true }));
+          });
+        }
+
+        if (globalRpcModeLocalEl && globalRpcModePublicEl) {
+          globalRpcModeLocalEl.addEventListener("click", () => setGlobalRpcMode("local"));
+          globalRpcModePublicEl.addEventListener("click", () => setGlobalRpcMode("public"));
+          applyGlobalRpcMode(getGlobalRpcMode());
+        }
+
+        let rpcConnTimer = null;
+        async function refreshRpcConnInfo() {
+          if (!rpcConnTextEl) return;
+          try {
+            const network = String(walletNetworkEl?.value || "mainnet");
+            const rpcUrl = String(walletRpcUrlEl?.value || "").trim() || null;
+            const info = await tauri.invoke("rpc_connection_info", { network, rpcUrl });
+
+            const mode = isPublicResolverValue(info?.rpcUrl) ? "Public" : "Local";
+            const net = String(info?.network || network);
+            const synced = info?.isSynced ? "synced" : "syncing";
+            const utxo = info?.isUtxoIndexed ? "utxo" : "no-utxo";
+            const p2p = String(info?.p2pId || "").trim();
+            const p2pShort = p2p ? `${p2p.slice(0, 10)}…` : "";
+
+            rpcConnTextEl.textContent = `${mode} ${net} • ${synced} • ${utxo}${p2pShort ? ` • ${p2pShort}` : ""}`;
+          } catch (_) {
+            rpcConnTextEl.textContent = "Disconnected";
+          }
+        }
+
+        if (rpcConnTextEl) {
+          refreshRpcConnInfo();
+          if (rpcConnTimer) clearInterval(rpcConnTimer);
+          rpcConnTimer = setInterval(refreshRpcConnInfo, 4000);
+          if (walletRpcUrlEl) walletRpcUrlEl.addEventListener("input", () => refreshRpcConnInfo());
+          if (walletNetworkEl) walletNetworkEl.addEventListener("change", () => refreshRpcConnInfo());
+        }
+
+        try {
+          document.querySelectorAll(".rpcMode").forEach((el) => {
+            el.style.display = "none";
+          });
+        } catch (_) {}
 
         if (modalCloseEl) modalCloseEl.addEventListener("click", closeModal);
         if (modalOverlayEl) {

@@ -354,6 +354,34 @@
         font-weight: 800;
       }
 
+      .headerPill {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .headerPillValue {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .headerPillWide {
+        max-width: 520px;
+      }
+
+      #rpcConnText {
+        max-width: 420px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .headerPill .tabBtn {
+        padding: 6px 10px;
+        border-radius: 999px;
+      }
+
       .page-content {
         flex: 1;
         width: min(1120px, 90vw);

@@ -5,13 +5,15 @@ use crate::error::{AudioTransferError, Result};
 use kaspa_addresses::{Address, Prefix, Version};
 use kaspa_consensus_core::config::params::Params;
 use kaspa_consensus_core::mass::MassCalculator;
-use kaspa_consensus_core::network::NetworkId;
+use kaspa_consensus_core::network::{NetworkId, NetworkType};
 use kaspa_consensus_core::sign;
 use kaspa_consensus_core::subnets::SUBNETWORK_ID_NATIVE;
 use kaspa_consensus_core::tx::{PopulatedTransaction, Transaction, TransactionId, TransactionInput, TransactionOutpoint, TransactionOutput, UtxoEntry};
 use kaspa_grpc_client::GrpcClient;
 use kaspa_rpc_core::model::{RpcDataVerbosityLevel, RpcHash, RpcTransactionId};
 use kaspa_rpc_core::notify::mode::NotificationMode;
+use kaspa_wrpc_client::client::ConnectOptions;
+use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
 use kaspa_txscript::pay_to_address_script;
 use rand::RngCore;
 use reqwest::Url;
@@ -20,6 +22,7 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use std::io::{self, Write};
 use std::str::FromStr;
+use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 
 const DEFAULT_KASPA_RPC_URL: &str = "grpc://127.0.0.1:16110";
@@ -59,14 +62,26 @@ struct RestAddressTxModel {
 }
 
 pub struct KaspaClient {
-    client: GrpcClient,
+    rpc: Arc<dyn RpcApi + Send + Sync>,
 }
 
 impl KaspaClient {
     const MAX_RPC_SCAN_PAGES_FROM_PRUNING: u32 = 25;
+    const RESOLVER_MAX_UTXO_INDEX_ATTEMPTS: u32 = 12;
 
     pub async fn new(rpc_url: Option<&str>) -> Result<Self> {
-        let rpc_url = rpc_url.unwrap_or(DEFAULT_KASPA_RPC_URL);
+        let rpc_url = rpc_url.unwrap_or(DEFAULT_KASPA_RPC_URL).trim();
+
+        if let Some(network_id) = Self::parse_public_resolver_spec(rpc_url) {
+            eprintln!(
+                "Connecting to Kaspa public node network via resolver (wRPC) on network: {}",
+                network_id
+            );
+            let wrpc = Self::connect_wrpc_via_resolver(network_id).await?;
+            eprintln!("Successfully connected via public resolver (wRPC)");
+            return Ok(Self { rpc: wrpc });
+        }
+
         eprintln!("Connecting to Kaspa node at: {}", rpc_url);
         let client = GrpcClient::connect_with_args(
             NotificationMode::Direct,
@@ -80,12 +95,86 @@ impl KaspaClient {
         )
         .await
         .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
-        let _ = client
+        let rpc: Arc<dyn RpcApi + Send + Sync> = Arc::new(client);
+        let _ = rpc
             .get_info()
             .await
             .map_err(|e| AudioTransferError::KaspaRpc(format!("Failed to connect to Kaspa node: {e}")))?;
         eprintln!("Successfully connected to Kaspa node");
-        Ok(Self { client })
+        Ok(Self { rpc })
+    }
+
+    fn parse_public_resolver_spec(rpc_url: &str) -> Option<NetworkId> {
+        let raw = rpc_url.trim();
+        if raw.is_empty() {
+            return None;
+        }
+        let lower = raw.to_ascii_lowercase();
+        let (head, tail) = lower.split_once(':').unwrap_or((&lower, ""));
+        if head != "public" && head != "resolver" {
+            return None;
+        }
+
+        let network = tail.trim();
+        if network.is_empty() || network == "mainnet" {
+            return Some(NetworkId::new(NetworkType::Mainnet));
+        }
+        if network == "devnet" {
+            return Some(NetworkId::new(NetworkType::Devnet));
+        }
+        if network == "testnet" || network == "tn10" || network == "testnet10" || network == "testnet-10" {
+            return Some(NetworkId::with_suffix(NetworkType::Testnet, 10));
+        }
+
+        None
+    }
+
+    async fn connect_wrpc_via_resolver(network_id: NetworkId) -> Result<Arc<dyn RpcApi + Send + Sync>> {
+        let mut last_err: Option<String> = None;
+
+        for attempt in 1..=Self::RESOLVER_MAX_UTXO_INDEX_ATTEMPTS {
+            let resolver = Resolver::default();
+            let client = KaspaRpcClient::new(
+                WrpcEncoding::Borsh,
+                None,
+                Some(resolver),
+                Some(network_id),
+                None,
+            )
+            .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
+
+            let client = Arc::new(client);
+            let mut opts = ConnectOptions::default();
+            opts.block_async_connect = true;
+            if let Err(e) = client.connect(Some(opts)).await {
+                last_err = Some(e.to_string());
+                sleep(Duration::from_millis(250)).await;
+                continue;
+            }
+
+            let rpc = client.rpc_api();
+            match rpc.get_info().await {
+                Ok(info) => {
+                    if info.is_utxo_indexed {
+                        return Ok(rpc);
+                    }
+                    last_err = Some("connected node is not UTXO-indexed".to_string());
+                }
+                Err(e) => {
+                    last_err = Some(e.to_string());
+                }
+            }
+
+            if attempt < Self::RESOLVER_MAX_UTXO_INDEX_ATTEMPTS {
+                sleep(Duration::from_millis(250)).await;
+            }
+        }
+
+        Err(AudioTransferError::KaspaRpc(format!(
+            "Unable to find a public resolver node with UTXO index enabled after {} attempt(s). Last error: {}",
+            Self::RESOLVER_MAX_UTXO_INDEX_ATTEMPTS,
+            last_err.unwrap_or_else(|| "unknown".to_string())
+        )))
     }
 
     fn network_prefix(&self, network: NetworkId) -> Prefix {
@@ -124,7 +213,7 @@ impl KaspaClient {
 
     async fn feerate_priority(&self) -> Result<f64> {
         let est = self
-            .client
+            .rpc
             .get_fee_estimate()
             .await
             .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
@@ -133,7 +222,7 @@ impl KaspaClient {
 
     async fn resolve_feerate(&self, feerate: Option<f64>, fee_multiplier: Option<f64>) -> Result<f64> {
         let est = self
-            .client
+            .rpc
             .get_fee_estimate()
             .await
             .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
@@ -398,7 +487,7 @@ impl KaspaClient {
         }
 
         let dag = self
-            .client
+            .rpc
             .get_block_dag_info()
             .await
             .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
@@ -423,7 +512,7 @@ impl KaspaClient {
         );
 
         let mut utxos = self
-            .client
+            .rpc
             .get_utxos_by_addresses(vec![from_addr.clone()])
             .await
             .map_err(|e| {
@@ -592,7 +681,7 @@ impl KaspaClient {
         );
 
         let dag = self
-            .client
+            .rpc
             .get_block_dag_info()
             .await
             .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
@@ -726,7 +815,7 @@ impl KaspaClient {
         manifest_tx = Self::finalize_and_sign_single_input(manifest_tx, kaspa_consensus_core::tx::UtxoEntry::new(initial_entry_amount, initial_entry_spk.clone(), UNACCEPTED_DAA_SCORE, false), &keypair)?;
 
         let manifest_txid: RpcTransactionId = self
-            .client
+            .rpc
             .submit_transaction((&manifest_tx).into(), false)
             .await
             .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
@@ -789,10 +878,10 @@ impl KaspaClient {
                 )));
             }
             tx.set_mass(ctx.storage_mass);
-            tx = Self::finalize_and_sign_single_input(tx, next_entry.clone(), &keypair)?;
+            let tx = Self::finalize_and_sign_single_input(tx, next_entry.clone(), &keypair)?;
 
             let submitted: RpcTransactionId = self
-                .client
+                .rpc
                 .submit_transaction((&tx).into(), false)
                 .await
                 .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
@@ -830,7 +919,7 @@ impl KaspaClient {
             let idx = resume_output_index as usize;
 
             let mempool_out = self
-                .client
+                .rpc
                 .get_mempool_entry(resume_txid, true, false)
                 .await
                 .ok()
@@ -841,7 +930,7 @@ impl KaspaClient {
             }
 
             let utxos = self
-                .client
+                .rpc
                 .get_utxos_by_addresses(vec![from_addr.clone()])
                 .await
                 .map_err(|e| {
@@ -870,7 +959,7 @@ impl KaspaClient {
         // Gather all outpoints currently spent by mempool transactions from this address
         let mut mempool_spent: HashSet<TransactionOutpoint> = HashSet::new();
         if let Ok(mut by_addr) = self
-            .client
+            .rpc
             .get_mempool_entries_by_addresses(vec![from_addr.clone()], true, false)
             .await
         {
@@ -887,7 +976,7 @@ impl KaspaClient {
         }
 
         let mut utxos = self
-            .client
+            .rpc
             .get_utxos_by_addresses(vec![from_addr.clone()])
             .await
             .map_err(|e| {
@@ -1251,7 +1340,7 @@ impl KaspaClient {
     }
 
     async fn find_transaction_payload(&self, tx_id: TransactionId, start_block_hash: Option<&str>) -> Result<Vec<u8>> {
-        if let Ok(entry) = self.client.get_mempool_entry(tx_id, true, false).await {
+        if let Ok(entry) = self.rpc.get_mempool_entry(tx_id, true, false).await {
             return Ok(entry.transaction.payload);
         }
 
@@ -1259,7 +1348,7 @@ impl KaspaClient {
 
         loop {
             let dag = self
-                .client
+                .rpc
                 .get_block_dag_info()
                 .await
                 .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
@@ -1296,7 +1385,7 @@ impl KaspaClient {
                 let response = loop {
                     attempt += 1;
                     match self
-                        .client
+                        .rpc
                         .get_virtual_chain_from_block_v2(start_hash, Some(RpcDataVerbosityLevel::Full), Some(page_limit))
                         .await
                     {
@@ -1406,7 +1495,7 @@ impl KaspaClient {
         let mut found_chunks: usize = 0;
 
         if let Ok(entries) = self
-            .client
+            .rpc
             .get_mempool_entries(true, false)
             .await
             .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))
@@ -1430,7 +1519,7 @@ impl KaspaClient {
         let mut effective_start_block_hash = start_block_hash;
         loop {
             let dag = self
-                .client
+                .rpc
                 .get_block_dag_info()
                 .await
                 .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
@@ -1463,7 +1552,7 @@ impl KaspaClient {
                 let response = loop {
                     attempt += 1;
                     match self
-                        .client
+                        .rpc
                         .get_virtual_chain_from_block_v2(start_hash, Some(RpcDataVerbosityLevel::Full), Some(page_limit))
                         .await
                     {
@@ -1569,7 +1658,7 @@ impl KaspaClient {
         let tx_id = TransactionId::from_str(tx_id_str)
             .map_err(|e| AudioTransferError::KaspaRpc(format!("Invalid transaction ID: {e}")))?;
 
-        if self.client.get_mempool_entry(tx_id, true, false).await.is_ok() {
+        if self.rpc.get_mempool_entry(tx_id, true, false).await.is_ok() {
             return Ok(None);
         }
 
@@ -1577,7 +1666,7 @@ impl KaspaClient {
 
         loop {
             let dag = self
-                .client
+                .rpc
                 .get_block_dag_info()
                 .await
                 .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
@@ -1605,7 +1694,7 @@ impl KaspaClient {
                 let response = loop {
                     attempt += 1;
                     match self
-                        .client
+                        .rpc
                         .get_virtual_chain_from_block(start_hash, true, Some(min_confirmation_count))
                         .await
                     {
@@ -1677,13 +1766,13 @@ impl KaspaClient {
 
     pub async fn get_network_info(&self) -> Result<String> {
         let info = self
-            .client
+            .rpc
             .get_info()
             .await
             .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
 
         let dag = self
-            .client
+            .rpc
             .get_block_dag_info()
             .await
             .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;

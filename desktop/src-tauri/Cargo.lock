@@ -3708,6 +3708,7 @@ dependencies = [
  "kaspa-utils",
  "kaspa-wallet-core",
  "kaspa-wallet-keys",
+ "kaspa-wrpc-client",
  "qrcode",
  "reqwest 0.11.27",
  "secp256k1",

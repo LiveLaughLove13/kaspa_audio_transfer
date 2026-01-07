@@ -19,6 +19,7 @@ kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch =
 kaspa-addresses = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
 kaspa-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
 kaspa-grpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
+kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
 
 # Async runtime
 tokio = { version = "1.33.0", features = ["full"] }
@@ -50,6 +51,7 @@ kaspa-addresses = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch 
 kaspa-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
 kaspa-grpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
 kaspa-txscript = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
+kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
 
 [dev-dependencies]
 tempfile = "3.10"

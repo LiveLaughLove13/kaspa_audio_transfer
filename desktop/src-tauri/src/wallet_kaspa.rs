@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use kaspa_addresses::{Address, Prefix, Version};
 use kaspa_consensus_core::{
@@ -19,10 +20,28 @@ use kaspa_rpc_core::{
     model::RpcTransactionId,
     notify::mode::NotificationMode,
 };
+use kaspa_wrpc_client::client::ConnectOptions;
+use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
 use kaspa_txscript::pay_to_address_script;
+use serde::Serialize;
 use secp256k1::Keypair;
+use tokio::time::{sleep, Duration};
 
 use crate::wallet_vault;
+
+type DynRpc = Arc<dyn RpcApi + Send + Sync>;
+const RESOLVER_MAX_UTXO_INDEX_ATTEMPTS: u32 = 12;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcConnectionInfo {
+    pub rpc_url: String,
+    pub network: String,
+    pub server_version: String,
+    pub is_synced: bool,
+    pub p2p_id: String,
+    pub is_utxo_indexed: bool,
+}
 
 fn parse_network(network: &str) -> Result<NetworkType, String> {
     match network.trim() {
@@ -41,13 +60,96 @@ fn prefix_for_network_id(network_id: NetworkId) -> Prefix {
     network_id.network_type().into()
 }
 
-async fn connect_client(rpc_url: Option<&str>) -> Result<GrpcClient, String> {
+fn network_id_for_wallet_network(network: NetworkType) -> NetworkId {
+    match network {
+        NetworkType::Mainnet => NetworkId::new(NetworkType::Mainnet),
+        NetworkType::Devnet => NetworkId::new(NetworkType::Devnet),
+        NetworkType::Testnet => NetworkId::with_suffix(NetworkType::Testnet, 10),
+        _ => NetworkId::new(network),
+    }
+}
+
+fn parse_public_resolver_spec(rpc_url: &str, default_network: NetworkType) -> Option<NetworkId> {
+    let raw = rpc_url.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let lower = raw.to_ascii_lowercase();
+    let (head, tail) = lower.split_once(':').unwrap_or((&lower, ""));
+    if head != "public" && head != "resolver" {
+        return None;
+    }
+
+    let network = tail.trim();
+    if network.is_empty() {
+        return Some(network_id_for_wallet_network(default_network));
+    }
+
+    if network == "mainnet" {
+        return Some(NetworkId::new(NetworkType::Mainnet));
+    }
+    if network == "devnet" {
+        return Some(NetworkId::new(NetworkType::Devnet));
+    }
+    if network == "testnet" || network == "tn10" || network == "testnet10" || network == "testnet-10" {
+        return Some(NetworkId::with_suffix(NetworkType::Testnet, 10));
+    }
+
+    None
+}
+
+async fn connect_client(rpc_url: Option<&str>, expected_network: NetworkType) -> Result<DynRpc, String> {
     let rpc_url = rpc_url
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .unwrap_or("grpc://127.0.0.1:16110");
 
-    GrpcClient::connect_with_args(
+    if let Some(network_id) = parse_public_resolver_spec(rpc_url, expected_network) {
+        let mut last_err: Option<String> = None;
+        for attempt in 1..=RESOLVER_MAX_UTXO_INDEX_ATTEMPTS {
+            let resolver = Resolver::default();
+            let client = KaspaRpcClient::new(
+                WrpcEncoding::Borsh,
+                None,
+                Some(resolver),
+                Some(network_id),
+                None,
+            )
+            .map_err(|e| format!("failed to create kaspa wRPC client: {e}"))?;
+
+            let client = Arc::new(client);
+            let mut opts = ConnectOptions::default();
+            opts.block_async_connect = true;
+            if let Err(e) = client.connect(Some(opts)).await {
+                last_err = Some(e.to_string());
+                sleep(Duration::from_millis(250)).await;
+                continue;
+            }
+
+            let rpc = client.rpc_api();
+            match rpc.get_info().await {
+                Ok(info) => {
+                    if info.is_utxo_indexed {
+                        return Ok(rpc);
+                    }
+                    last_err = Some("connected node is not UTXO-indexed".to_string());
+                }
+                Err(e) => last_err = Some(e.to_string()),
+            }
+
+            if attempt < RESOLVER_MAX_UTXO_INDEX_ATTEMPTS {
+                sleep(Duration::from_millis(250)).await;
+            }
+        }
+
+        return Err(format!(
+            "unable to find a public resolver node with UTXO index enabled after {} attempt(s). last error: {}",
+            RESOLVER_MAX_UTXO_INDEX_ATTEMPTS,
+            last_err.unwrap_or_else(|| "unknown".to_string())
+        ));
+    }
+
+    let client = GrpcClient::connect_with_args(
         NotificationMode::Direct,
         rpc_url.to_string(),
         None,
@@ -58,7 +160,32 @@ async fn connect_client(rpc_url: Option<&str>) -> Result<GrpcClient, String> {
         Default::default(),
     )
     .await
-    .map_err(|e| format!("failed to connect to kaspa grpc: {e}"))
+    .map_err(|e| format!("failed to connect to kaspa grpc: {e}"))?;
+    Ok(Arc::new(client))
+}
+
+pub async fn rpc_connection_info(network: &str, rpc_url: Option<&str>) -> Result<RpcConnectionInfo, String> {
+    let expected = parse_network(network)?;
+    let rpc_url_norm = rpc_url
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("grpc://127.0.0.1:16110");
+
+    let client = connect_client(Some(rpc_url_norm), expected).await?;
+    let info = client.get_info().await.map_err(|e| e.to_string())?;
+    let dag = client
+        .get_block_dag_info()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(RpcConnectionInfo {
+        rpc_url: rpc_url_norm.to_string(),
+        network: format!("{}", dag.network),
+        server_version: info.server_version,
+        is_synced: info.is_synced,
+        p2p_id: info.p2p_id,
+        is_utxo_indexed: info.is_utxo_indexed,
+    })
 }
 
 fn address_from_keypair(prefix: Prefix, keypair: &Keypair) -> Address {
@@ -66,7 +193,7 @@ fn address_from_keypair(prefix: Prefix, keypair: &Keypair) -> Address {
     Address::new(prefix, Version::PubKey, &xonly_pk.serialize())
 }
 
-async fn get_mempool_spent_outpoints(client: &GrpcClient, from_addr: &Address) -> HashSet<TransactionOutpoint> {
+async fn get_mempool_spent_outpoints(client: &DynRpc, from_addr: &Address) -> HashSet<TransactionOutpoint> {
     let mut spent: HashSet<TransactionOutpoint> = HashSet::new();
 
     if let Ok(mut by_addr) = client
@@ -89,7 +216,7 @@ async fn get_mempool_spent_outpoints(client: &GrpcClient, from_addr: &Address) -
 }
 
 async fn pick_largest_utxo(
-    client: &GrpcClient,
+    client: &DynRpc,
     from_addr: &Address,
 ) -> Result<(TransactionOutpoint, u64, kaspa_consensus_core::tx::ScriptPublicKey), String> {
     let mempool_spent = get_mempool_spent_outpoints(client, from_addr).await;
@@ -223,7 +350,7 @@ pub async fn wallet_get_balance_kas(
 ) -> Result<f64, String> {
     let expected = parse_network(network)?;
 
-    let client = connect_client(rpc_url).await?;
+    let client = connect_client(rpc_url, expected).await?;
     let dag = client
         .get_block_dag_info()
         .await
@@ -271,7 +398,7 @@ pub async fn wallet_send_kas(
         return Err("amount too small".to_string());
     }
 
-    let client = connect_client(rpc_url).await?;
+    let client = connect_client(rpc_url, expected).await?;
     let dag = client
         .get_block_dag_info()
         .await

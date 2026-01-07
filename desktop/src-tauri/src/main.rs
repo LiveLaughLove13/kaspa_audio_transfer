@@ -322,6 +322,11 @@ async fn wallet_get_balance(network: String, derivation_path: String, rpc_url: O
 }
 
 #[tauri::command(rename_all = "camelCase")]
+async fn rpc_connection_info(network: String, rpc_url: Option<String>) -> Result<wallet_kaspa::RpcConnectionInfo, String> {
+    wallet_kaspa::rpc_connection_info(&network, rpc_url.as_deref()).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
 async fn wallet_send_kas(
     network: String,
     derivation_path: String,
@@ -1334,6 +1339,7 @@ fn main() {
             node_bundle_get_dir,
             node_bundle_set_dir,
             kns_domain_owner,
+            rpc_connection_info,
             wallet_profiles_list,
             wallet_profile_create_mnemonic,
             wallet_profile_import_mnemonic,
