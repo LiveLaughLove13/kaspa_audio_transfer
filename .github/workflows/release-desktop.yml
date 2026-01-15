@@ -30,10 +30,11 @@ jobs:
         run: choco install wixtoolset -y
 
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --version 1.6.0 --locked
+        run: cargo install tauri-cli --version "^2" --locked
 
       - name: Build Tauri bundle
-        run: cargo tauri build --manifest-path desktop/src-tauri/Cargo.toml --bundles msi
+        working-directory: desktop/src-tauri
+        run: cargo tauri build --bundles msi
 
       - name: Upload bundles to GitHub Release
         uses: softprops/action-gh-release@v2

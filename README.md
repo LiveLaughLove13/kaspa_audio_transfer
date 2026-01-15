@@ -1,6 +1,12 @@
-# Kaspa Audio Transfer
+# Kaspa Data Transfer
 
-A command-line tool to store and retrieve files on the Kaspa blockchain (works for any file type, not just audio).
+Store and retrieve files on the Kaspa network.
+
+This repository contains:
+
+- **CLI**: `kaspa_data_transfer` (Rust)
+- **Desktop app**: `desktop/src-tauri` (Tauri)
+- **Android app**: `mobile/app/src-tauri` (Tauri Mobile)
 
 ## Features
 
@@ -11,143 +17,166 @@ A command-line tool to store and retrieve files on the Kaspa blockchain (works f
 
 ## Prerequisites
 
-- [Rust](https://www.rust-lang.org/tools/install) (latest stable version)
-- Access to a Kaspa node (local or remote)
+### Required (all targets)
 
-### Setup Local Node
+- [Rust](https://www.rust-lang.org/tools/install) (stable)
+- Git
+- Access to a Kaspa node RPC endpoint
 
-[Node](https://github.com/kaspanet/rusty-kaspa/releases) 
-Install latest asset for your OS for example, 'Windows, Dec 2025, v1.0.1 - rusty-kaspa-v1.0.1-win64.zip'
-Extract zip to a new folder named 'kaspad' on the desktop
+### Desktop (Tauri)
+
+- **Tauri CLI v2** (installed via Cargo)
+- On Windows, **WiX Toolset** is required for building an `.msi` bundle
+
+### Android (Tauri Mobile)
+
+- Android Studio (or Android SDK + command-line tools)
+- JDK (Android Studio bundled JBR/JDK is fine)
+- Android NDK installed/configured (as required by Tauri Android builds)
+
+## Kaspa node (local) 
+
+Download `kaspad` from the official Rusty Kaspa releases:
+
+- https://github.com/kaspanet/rusty-kaspa/releases
 
 ```bash
-# Navigate to the folder containing kaspad
-cd Desktop\kaspad
-# Mainnet
-# Standard setup
+# Mainnet (with UTXO index)
 kaspad --utxoindex
-
-# Testnet-10
-# For testing without real funds
-kaspad --testnet --netsuffix=10 --utxoinde
-
-# Get Testnet KAS
-# Visit: https://faucet-tn10.kaspanet.io/
 ```
-
-## Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/LiveLaughLove13/kaspa_audio_transfer
-cd kaspa_audio_transfer
-
-# Build in release mode (recommended)
-cargo build --release --bin kaspa_audio_transfer
-cargo run --manifest-path desktop/src-tauri/Cargo.toml  For GUI
-cargo tauri build
-
-# The binary will be available at:
-# - Linux/macOS: ./target/release/kaspa_audio_transfer
-# - Windows: .\target\release\kaspa_audio_transfer.exe
+# Testnet-10 (with UTXO index)
+kaspad --testnet --netsuffix=10 --utxoindex
 ```
 
-## Usage
+Testnet coins:
 
-### Sending an Audio File
+- https://faucet-tn10.kaspanet.io/
+
+## Get the source
+
+```bash
+git clone https://github.com/LiveLaughLove13/kaspa_audio_transfer && cd kaspa_audio_transfer
+```
 
 ```powershell
-# Basic usage
-kaspa_audio_transfer send --from-private-key YOUR_PRIVATE_KEY --to-address kaspa:recipient_address --file path\to\your\audio.mp3
-
-cargo run -- send "E:\Eminem - No Love Explicit Version ft. Lil Wayne.mp3" --from-private-key 1234567891234567891234567891234512345678912345678912345678912345 --to-address kaspa:qq3tqr9f0z6t6zwcrjkk8krwwltazcl0s4gvelvakvqmj9essyq4kaksa3v0m --amount 0.2
-
-# Test download a known upload example
-.\kaspa_audio_transfer.exe receive f30623784fd7be906ce7cee1c1f172dd45035e08a2c816402ed89365724e9010 --output kaspa_isKing.mp3 --start-block-hash b8e8f9e94d274c350a59b0f596fcafc6b423b7bdda57e3de9b14bdea5b7ad94b
-
-# With custom RPC URL (default: grpc://127.0.0.1:16110)
-kaspa_audio_transfer send --rpc-url grpc://your.node:port --from-private-key YOUR_PRIVATE_KEY --to-address kaspa:recipient_address --file song.mp3
-
-# Resume a failed send operation
-kaspa_audio_transfer send --from-private-key YOUR_PRIVATE_KEY --to-address kaspa:recipient_address --resume-from PREVIOUS_MANIFEST_TXID --resume-output-index 1 --file song.mp3
+git clone https://github.com/LiveLaughLove13/kaspa_audio_transfer; cd kaspa_audio_transfer
 ```
 
-## Testnet usage
+## CLI (kaspa_data_transfer)
+
+### Build (release)
+
+```bash
+cargo build --release --bin kaspa_data_transfer
+```
+
+### Run
+
+```bash
+cargo run --release --bin kaspa_data_transfer -- --help
+```
+
+### Common commands
 
 ```powershell
-# Basic usage
-kaspa_audio_transfer send --rpc-url grpc://127.0.0.1:16210 --from-private-key YOUR_PRIVATE_KEY --to-address kaspatest:recipient_address --file path\to\your\audio.mp3
-
-cargo run -- send "E:\Eminem - No Love Explicit Version ft. Lil Wayne.mp3" --rpc-url grpc://127.0.0.1:16210 --from-private-key 1234567891234567891234567891234512345678912345678912345678912345 --to-address kaspatest:qq3tqr9f0z6t6zwcrjkk8krwwltazcl0s4gvelvakvqmj9essyq4kaksa3v0m --amount 0.2
-
-# Test download (example only, insert real TXID)
-.\kaspa_audio_transfer.exe receive f30623784fd7be906ce7cee1c1f172dd45035e08a2c816402ed89365724e9010 --output kaspa_isKing.mp3 --rpc-url grpc://127.0.0.1:16210 --start-block-hash b8e8f9e94d274c350a59b0f596fcafc6b423b7bdda57e3de9b14bdea5b7ad94b 
-
-# Resume a failed send operation
-kaspa_audio_transfer send --rpc-url grpc://127.0.0.1:16210 --from-private-key YOUR_PRIVATE_KEY --to-address kaspatest:recipient_address --resume-from PREVIOUS_MANIFEST_TXID --resume-output-index 1 --file song.mp3
+kaspa_data_transfer send "path\\to\\file" --from-private-key YOUR_PRIVATE_KEY --to-address kaspa:RECIPIENT_ADDRESS --amount 0
 ```
-
-Blank explanation of flow
-
-if you want to send a file you do
-.\kaspa_audio_transfer.exe send "full path here" --from-private-key <a Priv here> --to-address <any kaspa address here> --amount 1 
-It will give you the TX, which you then use to get block hash on the [mainnet explorer](https://explorer.kaspa.org/).
-then you do
-
-.\kaspa_audio_transfer.exe receive <tx it gives at bottom> --output <file.type> --start-block-hash <first block hashof tx> 
-
-if testing on testnet
-
-if you want to send a file on testnet you do
-.\kaspa_audio_transfer.exe send "full path here" --rpc-url grpc://127.0.0.1:16210 --from-private-key <a Priv here> --to-address <any kaspa address here> --amount 1 
-It will give you the TX, which you then use to get block hash on the [testnet explorer](https://explorer-tn10.kaspa.org/).
-then you do 
-
-.\kaspa_audio_transfer.exe receive <TX_ID> --output <file> --rpc-url grpc://127.0.0.1:16210 --start-block-hash <first block hash of tx>
-
-
-### Receiving an Audio File
 
 ```powershell
-# Basic usage (will scan from pruning point)
-kaspa_audio_transfer receive TX_ID --output output.mp3
-
-# Faster retrieval with start block hash
-kaspa_audio_transfer receive TX_ID --output received_song.mp3 --start-block-hash BLOCK_HASH
-
-# Example with real values
-cargo run -- receive b0c3220031a009c0b8bf71411acab1657ca8680b535bcee704f3e9e80939d6c1 --output my_song.mp3 --start-block-hash eb92329b04ffe0bd70357b365e50309c9daee8cb8751d26933b62da5283840fc
+kaspa_data_transfer receive TX_ID --output output.bin
 ```
 
-## How It Works
+```powershell
+kaspa_data_transfer estimate "path\\to\\file" --from-private-key YOUR_PRIVATE_KEY
+```
 
-1. **Sending**:
-   - Splits the audio file into chunks (max ~24KB each)
-   - Creates a manifest transaction containing metadata
-   - Sends chunk transactions referencing the manifest
-   - Each chunk is linked using a unique file ID
+```powershell
+kaspa_data_transfer tx-accepting-block-hash TX_ID
+```
 
-2. **Receiving**:
-   - Retrieves the manifest transaction using the provided TX ID
-   - Scans for chunk transactions using the file ID
-   - Reassembles the chunks in order
-   - Saves the complete audio file
+### RPC URL
+
+By default the CLI uses:
+
+- Mainnet: `grpc://127.0.0.1:16110`
+
+Override with `--rpc-url`:
+
+```powershell
+kaspa_data_transfer send "path\\to\\file" --rpc-url grpc://127.0.0.1:16210 --from-private-key YOUR_PRIVATE_KEY --to-address kaspatest:RECIPIENT_ADDRESS --amount 0
+```
+
+## Desktop app (Tauri)
+
+### Install Tauri CLI (v2)
+
+```bash
+cargo install tauri-cli --version "^2" --locked
+```
+
+### Dev run
+
+Run this from `desktop/src-tauri`:
+
+```bash
+cargo tauri dev
+```
+
+### Build bundle
+
+Run this from `desktop/src-tauri`:
+
+```bash
+cargo tauri build --bundles msi
+```
+
+Notes:
+
+- The desktop app bundles the `kaspa_data_transfer` helper binary into the installer.
+- On Windows, building the `.msi` requires WiX Toolset.
+
+## Android app (Tauri Mobile)
+
+### Install Tauri CLI (v2)
+
+```bash
+cargo install tauri-cli --version "^2" --locked
+```
+
+### Build a tester APK (arm64 debug)
+
+Run this from `mobile/app`:
+
+```powershell
+cargo tauri android build --debug --target aarch64 --split-per-abi -c .\src-tauri\tauri.conf.json
+```
+
+APK output path:
+
+```text
+mobile\app\src-tauri\gen\android\app\build\outputs\apk\arm64\debug\app-arm64-debug.apk
+```
+
+## How it works (high level)
+
+- **Send**
+  - The file is chunked.
+  - A manifest transaction is created with metadata.
+  - Chunk transactions are submitted and linked to the manifest.
+- **Receive**
+  - The manifest is read from the provided TX ID.
+  - Chunk transactions are discovered and reassembled into the original file.
 
 ## Troubleshooting
 
-### Common Issues
-
-1. **RPC Timeouts**:
-   - Ensure your Kaspa node is synced and responsive
-   - Try increasing the RPC timeout in the code if needed
-
-2. **Missing Chunks**:
-   - The tool will retry several times automatically
-   - Check if the chunks exist in the mempool or recent blocks
-
-3. **Insufficient Funds**:
-   - Sending requires KAS for transaction fees
-   - Each chunk requires a small amount of KAS for fees
+- **Kaspa node not synced / RPC errors**
+  - Ensure your node is fully synced and the gRPC port is reachable.
+- **Desktop MSI build fails on Windows**
+  - Install WiX Toolset and try again.
+- **Android build fails**
+  - Confirm Android Studio SDK/NDK are installed and your JDK is configured.
 
 ## License
 

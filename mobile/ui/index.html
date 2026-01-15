@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>Kaspa Data Transfer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="splash" class="splash" aria-hidden="true">
+      <canvas id="splashCanvas" class="splashCanvas"></canvas>
+      <div id="splashNodes" class="splashNodes"></div>
+      <div class="splashCenter">
+        <div class="splashBrand">
+          <svg class="splashLogo" width="84" height="84" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true">
+            <path d="M11 1.6L19.2 6.4V15.6L11 20.4L2.8 15.6V6.4L11 1.6Z" stroke="var(--kaspa-primary)" stroke-width="1.8" stroke-linejoin="round" />
+            <path d="M4.9 11H7.2L8.4 8.1L10.1 14.2L11.5 10.3L12.6 12.7H14.9" stroke="var(--kaspa-accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <div class="splashTitle">Kaspa Data Transfer</div>
+          <div class="splashSub">Loading…</div>
+        </div>
+      </div>
+    </div>
+
+    <header class="app-header">
+      <div class="logo">
+        <svg class="logo-icon" width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+          <defs>
+            <linearGradient id="katLogoG" x1="3" y1="19" x2="19" y2="3" gradientUnits="userSpaceOnUse">
+              <stop stop-color="var(--kaspa-accent)" />
+              <stop offset="1" stop-color="var(--kaspa-primary)" />
+            </linearGradient>
+          </defs>
+          <path d="M11 1.6L19.2 6.4V15.6L11 20.4L2.8 15.6V6.4L11 1.6Z" stroke="url(#katLogoG)" stroke-width="1.8" stroke-linejoin="round" />
+          <path d="M4.9 11H7.2L8.4 8.1L10.1 14.2L11.5 10.3L12.6 12.7H14.9" stroke="url(#katLogoG)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span class="logo-text">Kaspa Data Transfer</span>
+      </div>
+
+      <nav class="nav-links" aria-label="Primary">
+        <button id="navTransfer" class="navBtn navBtnActive" type="button">Transfer</button>
+        <button id="navWallet" class="navBtn" type="button">Wallet</button>
+        <button id="navManage" class="navBtn" type="button">Manage</button>
+        <button id="navImport" class="navBtn" type="button">Import</button>
+        <button id="navStudio" class="navBtn" type="button">Studio</button>
+      </nav>
+
+      <div class="header-actions">
+        <div class="pill headerPill">
+          <span class="headerPillLabel">Status</span>
+          <span id="pillText" class="headerPillValue">Ready</span>
+        </div>
+        <div class="pill headerPill headerPillWide">
+          <span class="headerPillLabel">Connected</span>
+          <span id="rpcConnText" class="headerPillValue">—</span>
+        </div>
+        <div class="pill headerPill">
+          <span class="headerPillLabel">RPC</span>
+          <span class="headerPillValue">
+            <button id="globalRpcModeLocal" class="tabBtn tabBtnActive" type="button">Local</button>
+            <button id="globalRpcModePublic" class="tabBtn" type="button">Public</button>
+          </span>
+        </div>
+        <div class="pill" id="pill" style="display:none;"></div>
+        <a class="btn btn-primary" href="https://github.com/liveLaughLove13" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </div>
+    </header>
+
+    <main class="page-content">
+      <section class="hero">
+        <div class="hero-copy">
+          <h1 id="pageTitle">Transfer</h1>
+          <p class="status" id="status">Send or receive a file using your local Kaspa node RPC.</p>
+        </div>
+      </section>
+
+      <div class="error" id="error"></div>
+
+      <div class="pages" style="display:none;">
+            <section id="pageWallet" class="page">
+              <section id="walletShell" class="card walletShell">
+        <div class="walletHeaderTop">
+          <div class="walletHeaderTitle">Wallet</div>
+          <div class="pill" id="walletStatus">Locked</div>
+        </div>
+
+        <div class="walletHeaderGrid">
+          <div class="walletHeaderCol">
+            <label class="walletHeaderLabel" for="walletProfileSelect">Profile</label>
+            <div class="walletHeaderRow">
+              <select id="walletProfileSelect" class="walletField">
+                <option value="">(none)</option>
+              </select>
+              <button id="walletRefreshBtn" class="btn btn-secondary walletHeaderBtn" type="button">Refresh</button>
+            </div>
+          </div>
+
+          <div class="walletHeaderCol">
+            <label class="walletHeaderLabel" for="walletPassword">Password</label>
+            <div class="walletHeaderRow">
+              <input id="walletPassword" class="walletField" type="password" autocomplete="off" spellcheck="false" />
+              <button id="walletUnlockBtn" class="btn btn-secondary walletHeaderBtn" type="button">Unlock</button>
+              <button id="walletLockBtn" class="btn btn-secondary walletHeaderBtn" type="button">Lock</button>
+            </div>
+            <div class="walletHeaderHint">Unlocked profile: <span id="walletUnlocked">—</span></div>
+          </div>
+        </div>
+
+        <div class="walletActionRow">
+          <a class="walletActionBtn" href="#walletSendSection">Send</a>
+          <a class="walletActionBtn" href="#walletReceiveSection">Receive</a>
+          <button id="walletTabAdvanced" class="tabBtn" type="button">Advanced</button>
+          <button id="walletHdrCreate" class="tabBtn" type="button">Create</button>
+          <button id="walletHdrImport" class="tabBtn" type="button">Import</button>
+          <button id="walletHdrDelete" class="tabBtn" type="button">Delete</button>
+          <details class="walletMoreMenu">
+            <summary class="walletMoreBtn">More</summary>
+            <div class="walletMorePopover">
+              <div class="tabs">
+                <button id="walletTabOverview" class="tabBtn tabBtnActive" type="button">Overview</button>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div id="walletOverviewPanel" style="margin-top:14px;">
+          <div class="walletOverviewHero">
+            <button id="walletHeroRefreshBtn" class="walletHeroIconWrap" type="button" aria-label="Refresh wallet" onclick="document.getElementById('walletBalanceRefreshBtn')?.click();">
+              <span class="walletHeroIconStack" aria-hidden="true">
+                <img class="walletHeroIcon walletHeroIconKaspa" src="assets/kaspa.svg" alt="" />
+                <svg class="walletHeroIcon walletHeroIconRefresh" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="32" cy="32" r="22" fill="rgba(73, 234, 203, 0.60)"/>
+                  <path d="M44 30c-1.6-6.2-7.1-10.8-13.8-10.8-7.9 0-14.2 6.4-14.2 14.3 0 7.9 6.3 14.3 14.2 14.3 6.2 0 11.5-3.9 13.5-9.4" stroke="rgba(255, 255, 255, 0.96)" stroke-width="5" stroke-linecap="round"/>
+                  <path d="M44 20v10h-10" stroke="rgba(255, 255, 255, 0.96)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+            </button>
+            <div class="walletHeroAmount">
+              <span id="walletHeroBalance" class="walletHeroBalance">—</span>
+              <span class="walletHeroTicker">KAS</span>
+            </div>
+            <div class="walletHeroActions">
+              <button id="walletHeroSendBtn" class="walletHeroBtn" type="button">Send</button>
+              <button id="walletHeroReceiveBtn" class="walletHeroBtn" type="button">Receive</button>
+              <button id="walletHeroTxBtn" class="walletHeroBtn" type="button">History</button>
+              <button id="walletHeroAccountBtn" class="walletHeroBtn" type="button">Account</button>
+              <button id="walletHeroManageBtn" class="walletHeroBtn" type="button">Manage</button>
+            </div>
+          </div>
+
+          <div id="walletOverviewStash" style="display:none;">
+            <div id="walletReceiveSection" class="collapseCard card" style="display:none;">
+              <input id="walletAddressCardToggle" class="collapseToggle" type="checkbox" checked />
+              <div class="collapseHeader">
+                <label class="collapseTitle" for="walletAddressCardToggle">Address</label>
+                <div class="collapseActions">
+                  <button id="walletCopyAddressBtn" class="copyBtn" type="button">Copy</button>
+                  <label class="collapseChevron" for="walletAddressCardToggle" aria-label="Toggle"></label>
+                </div>
+              </div>
+              <div class="collapseBody">
+                <div style="font-size:12px;color:var(--text-muted);word-break:break-all;">
+                  <div><span style="opacity:0.85;">Address:</span> <span id="walletDerivedAddress">—</span></div>
+                  <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                    <div style="min-width:0;flex:1;"><span style="opacity:0.85;">Path:</span> <span id="walletFullPath">—</span></div>
+                    <button id="walletCopyPathBtn" class="copyBtn" type="button">Copy</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="walletReceiveSheet" class="walletReceiveSheet" style="display:none;">
+              <div class="walletReceiveQrWrap">
+                <div class="walletReceiveQr">
+                  <div id="walletReceiveQrSvg" class="walletReceiveQrSvg" aria-hidden="true"></div>
+                  <div id="walletReceiveQrFallback" class="walletReceiveQrFallback" style="display:none;">QR unavailable</div>
+                </div>
+              </div>
+              <div class="walletReceiveAddr">
+                <div class="walletReceiveAddrLabel">Kaspa address</div>
+                <div id="walletReceiveAddrText" class="walletReceiveAddrText">—</div>
+              </div>
+              <div class="walletReceiveActions">
+                <button id="walletReceiveCopyBtn" class="walletReceiveBtn" type="button">Copy</button>
+                <button id="walletReceiveShareBtn" class="walletReceiveBtn walletReceiveBtnPrimary" type="button">Share</button>
+              </div>
+            </div>
+
+            <div id="walletSendSection" class="collapseCard card">
+              <input id="walletSendCardToggle" class="collapseToggle" type="checkbox" checked />
+              <div class="collapseHeader">
+                <label class="collapseTitle" for="walletSendCardToggle">Send Funds</label>
+                <div class="collapseActions">
+                  <label class="collapseChevron" for="walletSendCardToggle" aria-label="Toggle"></label>
+                </div>
+              </div>
+              <div class="collapseBody">
+                <div style="margin-top:6px;display:flex;gap:10px;">
+                  <input id="walletSendTo" type="text" placeholder="To address" spellcheck="false" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                </div>
+                <div id="walletSendToResolved" class="knsPreview" style="display:none;"></div>
+                <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
+                  <input id="walletSendAmount" type="number" step="0.00000001" value="0.15" style="width:160px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                  <button id="walletSendKasBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:linear-gradient(135deg,var(--kaspa-accent) 0%,var(--kaspa-primary) 100%);color:#03181a;font-weight:900;">Send</button>
+                </div>
+                <div style="margin-top:10px;font-size:12px;color:var(--text-muted);word-break:break-all;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                    <div style="min-width:0;flex:1;"><span style="opacity:0.85;">TXID:</span> <span id="walletSendKasTxid">—</span></div>
+                    <button id="walletCopySendKasTxidBtn" class="copyBtn" type="button">Copy</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="walletBalanceSection" class="collapseCard card walletCardAccent">
+              <input id="walletBalanceCardToggle" class="collapseToggle" type="checkbox" checked />
+              <div class="collapseHeader">
+                <label class="collapseTitle" for="walletBalanceCardToggle">Balance</label>
+                <div class="collapseActions">
+                  <button id="walletBalanceRefreshBtn" style="cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.20);color:var(--text);font-weight:800;">Refresh</button>
+                  <label class="collapseChevron" for="walletBalanceCardToggle" aria-label="Toggle"></label>
+                </div>
+              </div>
+              <div class="collapseBody">
+                <div style="margin-top:6px;font-size:28px;font-weight:950;letter-spacing:0.01em;">
+                  <span id="walletBalance">—</span>
+                </div>
+                <div style="margin-top:2px;font-size:14px;font-weight:900;opacity:0.95;">KAS</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="walletGrid" style="display:none;margin-top:14px;">
+            <div id="walletTxHistorySection" class="collapseCard card" style="grid-column: 1 / -1;">
+              <input id="walletTxHistoryCardToggle" class="collapseToggle" type="checkbox" checked />
+              <div class="collapseHeader">
+                <label class="collapseTitle" for="walletTxHistoryCardToggle">Transaction History</label>
+                <div class="collapseActions">
+                  <button id="walletTxRefreshBtn" style="cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.20);color:var(--text);font-weight:800;">Refresh</button>
+                  <label class="collapseChevron" for="walletTxHistoryCardToggle" aria-label="Toggle"></label>
+                </div>
+              </div>
+              <div class="collapseBody">
+                <div id="walletTxHistoryStatus" style="font-size:12px;color:var(--text-muted);">—</div>
+                <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                  <div>
+                    <div style="font-weight:850;margin-bottom:8px;">Received</div>
+                    <div id="walletTxReceivedList" class="txList"></div>
+                  </div>
+                  <div>
+                    <div style="font-weight:850;margin-bottom:8px;">Sent</div>
+                    <div id="walletTxSentList" class="txList"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="walletAccountSection" class="collapseCard card" style="grid-column: 1 / -1;">
+              <input id="walletAccountCardToggle" class="collapseToggle" type="checkbox" checked />
+              <div class="collapseHeader">
+                <label class="collapseTitle" for="walletAccountCardToggle">Account</label>
+                <div class="collapseActions">
+                  <button id="walletDeriveBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Refresh address</button>
+                  <label class="collapseChevron" for="walletAccountCardToggle" aria-label="Toggle"></label>
+                </div>
+              </div>
+              <div class="collapseBody">
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                  <label style="font-size:12px;color:var(--text-muted);">Network</label>
+                  <select id="walletNetwork" style="padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);">
+                    <option value="mainnet">mainnet</option>
+                    <option value="testnet">testnet</option>
+                    <option value="devnet">devnet</option>
+                  </select>
+                  <label style="font-size:12px;color:var(--text-muted);">RPC</label>
+                  <div class="rpcMode" style="display:flex;gap:6px;align-items:center;">
+                    <button id="walletRpcModeLocal" class="tabBtn tabBtnActive" type="button" style="padding:8px 10px;border-radius:999px;">Local</button>
+                    <button id="walletRpcModePublic" class="tabBtn" type="button" style="padding:8px 10px;border-radius:999px;">Public</button>
+                  </div>
+                  <input id="walletRpcUrl" type="text" value="grpc://127.0.0.1:16110" spellcheck="false" style="flex:1;min-width:220px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                </div>
+
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+                  <label style="font-size:12px;color:var(--text-muted);">Base</label>
+                  <input id="walletBasePath" type="text" value="m/44'/111111'/0'" spellcheck="false" style="flex:1;min-width:240px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                </div>
+
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+                  <label style="font-size:12px;color:var(--text-muted);">Chain</label>
+                  <select id="walletChain" style="padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);">
+                    <option value="0">receive</option>
+                    <option value="1">change</option>
+                  </select>
+                  <label style="font-size:12px;color:var(--text-muted);">Index</label>
+                  <input id="walletAddrIndex" type="number" value="0" min="0" step="1" style="width:110px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="walletManagePanel" style="display:none;margin-top:14px;">
+
+        <div class="walletGrid" style="margin-top:14px;">
+          <div id="walletManageCreateSection" class="collapseCard card">
+            <input id="walletManageCreateToggle" class="collapseToggle" type="checkbox" checked />
+            <div class="collapseHeader">
+              <label class="collapseTitle" for="walletManageCreateToggle">Create profile (new mnemonic)</label>
+              <div class="collapseActions">
+                <label class="collapseChevron" for="walletManageCreateToggle" aria-label="Toggle"></label>
+              </div>
+            </div>
+            <div class="collapseBody">
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <input id="walletNewUsername" type="text" placeholder="Username" spellcheck="false" style="flex:1;min-width:180px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                <input id="walletNewPassword" type="password" placeholder="Password" autocomplete="off" style="flex:1;min-width:180px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                <select id="walletWordCount" style="width:96px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);">
+                  <option value="24">24</option>
+                  <option value="12">12</option>
+                </select>
+                <button id="walletCreateBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:linear-gradient(135deg,var(--kaspa-accent) 0%,var(--kaspa-primary) 100%);color:#03181a;font-weight:900;">Create</button>
+              </div>
+              <div style="margin-top:6px;font-size:11px;color:var(--text-muted);line-height:1.35;">This will show a mnemonic once. Save it securely.</div>
+            </div>
+          </div>
+
+          <div id="walletManageImportSection" class="collapseCard card">
+            <input id="walletManageImportToggle" class="collapseToggle" type="checkbox" checked />
+            <div class="collapseHeader">
+              <label class="collapseTitle" for="walletManageImportToggle">Import profile</label>
+              <div class="collapseActions">
+                <label class="collapseChevron" for="walletManageImportToggle" aria-label="Toggle"></label>
+              </div>
+            </div>
+            <div class="collapseBody">
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <input id="walletImportUsername" type="text" placeholder="Username" spellcheck="false" style="flex:1;min-width:180px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                <input id="walletImportPassword" type="password" placeholder="Password" autocomplete="off" style="flex:1;min-width:180px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+              </div>
+
+              <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div>
+                  <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Mnemonic (12/24 words)</label>
+                  <textarea id="walletImportMnemonic" rows="3" spellcheck="false" style="width:100%;resize:vertical;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);"></textarea>
+                  <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;">
+                    <input id="walletMnemonicPass" type="password" placeholder="Mnemonic passphrase (optional)" autocomplete="off" style="flex:1;min-width:220px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                    <button id="walletImportMnemonicBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Import mnemonic</button>
+                  </div>
+                </div>
+                <div>
+                  <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Private key (hex)</label>
+                  <textarea id="walletImportPrivKey" rows="3" spellcheck="false" style="width:100%;resize:vertical;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);"></textarea>
+                  <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+                    <button id="walletImportPrivKeyBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Import private key</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="walletManageDataSection" class="collapseCard card" style="grid-column: 1 / -1;">
+            <input id="walletManageDataToggle" class="collapseToggle" type="checkbox" checked />
+            <div class="collapseHeader">
+              <label class="collapseTitle" for="walletManageDataToggle">Wallet data</label>
+              <div class="collapseActions">
+                <label class="collapseChevron" for="walletManageDataToggle" aria-label="Toggle"></label>
+              </div>
+            </div>
+            <div class="collapseBody">
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button id="walletDeleteProfileBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Delete selected profile</button>
+                <button id="walletClearAllProfilesBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255, 120, 120, 0.35);background:rgba(255, 80, 80, 0.12);color:var(--text);font-weight:950;">Clear ALL wallet data</button>
+              </div>
+              <div style="margin-top:6px;font-size:11px;color:var(--text-muted);line-height:1.35;">These actions remove saved wallet profiles (usernames/accounts) from this device.</div>
+            </div>
+          </div>
+        </div>
+
+        </div>
+
+        <div id="walletAdvancedPanel" style="display:none;margin-top:14px;">
+          <div class="walletGrid">
+            <div class="collapseCard card">
+              <input id="walletAdvancedDebugToggle" class="collapseToggle" type="checkbox" checked />
+              <div class="collapseHeader">
+                <label class="collapseTitle" for="walletAdvancedDebugToggle">Debug</label>
+                <div class="collapseActions">
+                  <label class="collapseChevron" for="walletAdvancedDebugToggle" aria-label="Toggle"></label>
+                </div>
+              </div>
+              <div class="collapseBody">
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                  <button id="walletDebugBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Fingerprint</button>
+                  <div style="font-size:12px;color:var(--text-muted);word-break:break-all;" id="walletDebugOut">—</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+              </section>
+            </section>
+
+            <section id="pageImport" class="page">
+              <section class="card">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                  <div style="font-weight:800;">Import</div>
+                </div>
+
+                <div style="margin-top:14px;">
+                  <div class="collapseCard card">
+                    <input id="importNodeToolsToggle" class="collapseToggle" type="checkbox" checked />
+                    <div class="collapseHeader">
+                      <label class="collapseTitle" for="importNodeToolsToggle">Import node tools</label>
+                      <div class="collapseActions">
+                        <label class="collapseChevron" for="importNodeToolsToggle" aria-label="Toggle"></label>
+                      </div>
+                    </div>
+                    <div class="collapseBody">
+                      <div style="font-size:12px;color:var(--text-muted);line-height:1.35;">Select the folder containing <span style="font-weight:850;">kaspad.exe</span>, <span style="font-weight:850;">stratum-bridge.exe</span>, and <span style="font-weight:850;">config.yaml</span>.</div>
+                      <div style="margin-top:10px;font-size:12px;color:var(--text-muted);word-break:break-all;">Current: <span id="nodeBundleDirOut">—</span></div>
+                      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+                        <button id="nodeBundleImportBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Import</button>
+                        <button id="nodeBundleOpenBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Open folder</button>
+                        <button id="nodeBundleClearBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255, 120, 120, 0.35);background:rgba(255, 80, 80, 0.12);color:var(--text);font-weight:900;">Clear</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </section>
+
+            <section id="pageStudio" class="page">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+                <div class="tabs">
+                  <button id="studioTabAudio" class="tabBtn tabBtnActive" type="button">Audio</button>
+                  <button id="studioTabVideo" class="tabBtn" type="button">Video</button>
+                </div>
+              </div>
+
+              <div id="studioAudioPanel" class="card">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                  <div style="font-weight:800;">Audio Recorder</div>
+                  <div class="pill" style="display:flex;align-items:center;gap:10px;">
+                    <span style="font-weight:850;">Status</span>
+                    <span id="studioAudioStatus" style="color:var(--text-muted);">Idle</span>
+                  </div>
+                </div>
+
+                <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                  <div>
+                    <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Microphone</label>
+                    <select id="studioAudioMic" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);"></select>
+                    <div style="margin-top:6px;font-size:11px;color:var(--text-muted);line-height:1.35;">Choose an input device, then record.</div>
+                  </div>
+                  <div>
+                    <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Send settings</label>
+                    <input id="studioAudioPriv" type="password" placeholder="From private key (hex)" autocomplete="off" spellcheck="false" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                    <div id="studioAudioPrivAutoHint" style="display:none;margin-top:6px;font-size:11px;color:var(--text-muted);line-height:1.35;">Wallet synced (Signing automatically)</div>
+                    <div style="margin-top:10px;display:flex;gap:10px;">
+                      <input id="studioAudioTo" type="text" placeholder="To address" spellcheck="false" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                    </div>
+                    <div id="studioAudioToResolved" class="knsPreview" style="display:none;"></div>
+                    <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
+                      <input id="studioAudioAmount" type="number" step="0.00000001" value="0.15" style="width:160px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                      <div class="rpcMode" style="display:flex;gap:6px;align-items:center;">
+                        <button id="studioAudioRpcModeLocal" class="tabBtn tabBtnActive" type="button" style="padding:8px 10px;border-radius:999px;">Local</button>
+                        <button id="studioAudioRpcModePublic" class="tabBtn" type="button" style="padding:8px 10px;border-radius:999px;">Public</button>
+                      </div>
+                      <input id="studioAudioRpc" type="text" value="grpc://127.0.0.1:16110" style="flex:1;min-width:220px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                    </div>
+                  </div>
+                </div>
+
+                <div style="margin-top:10px;height:1px;background:rgba(112, 199, 186, 0.14);"></div>
+
+                <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+                  <button id="studioAudioStart" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:linear-gradient(135deg,var(--kaspa-accent) 0%,var(--kaspa-primary) 100%);color:#03181a;font-weight:900;">Record</button>
+                  <button id="studioAudioStop" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Stop</button>
+                  <button id="studioAudioDelete" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255, 120, 120, 0.35);background:rgba(255, 80, 80, 0.12);color:var(--text);font-weight:950;">Delete take</button>
+                  <div style="flex:1;"></div>
+                  <button id="studioAudioSave" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Save</button>
+                  <button id="studioAudioExportMp3" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Export MP3</button>
+                  <button id="studioAudioExportWav" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Export WAV</button>
+                  <button id="studioAudioSend" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:950;">Send</button>
+                </div>
+
+                <div style="margin-top:10px;">
+                  <audio id="studioAudioPlayback" controls style="width:100%;display:none;"></audio>
+                  <div id="studioAudioMeta" style="margin-top:6px;font-size:11px;color:var(--text-muted);line-height:1.35;display:none;"></div>
+                </div>
+              </div>
+
+              <div id="studioVideoPanel" class="card" style="display:none;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                  <div style="font-weight:800;">Video Recorder</div>
+                  <div class="pill" style="display:flex;align-items:center;gap:10px;">
+                    <span style="font-weight:850;">Status</span>
+                    <span id="studioVideoStatus" style="color:var(--text-muted);">Idle</span>
+                  </div>
+                </div>
+
+                <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                  <div>
+                    <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Video source</label>
+                    <select id="studioVideoSource" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);">
+                      <option value="camera">Camera</option>
+                      <option value="screen">Screen</option>
+                    </select>
+                    <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                      <div>
+                        <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Camera</label>
+                        <select id="studioVideoCam" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);"></select>
+                      </div>
+                      <div>
+                        <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Microphone</label>
+                        <select id="studioVideoMic" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);"></select>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Send settings</label>
+                    <input id="studioVideoPriv" type="password" placeholder="From private key (hex)" autocomplete="off" spellcheck="false" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                    <div id="studioVideoPrivAutoHint" style="display:none;margin-top:6px;font-size:11px;color:var(--text-muted);line-height:1.35;">Wallet synced (Signing automatically)</div>
+                    <div style="margin-top:10px;display:flex;gap:10px;">
+                      <input id="studioVideoTo" type="text" placeholder="To address" spellcheck="false" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                    </div>
+                    <div id="studioVideoToResolved" class="knsPreview" style="display:none;"></div>
+                    <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
+                      <input id="studioVideoAmount" type="number" step="0.00000001" value="0.15" style="width:160px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                      <div class="rpcMode" style="display:flex;gap:6px;align-items:center;">
+                        <button id="studioVideoRpcModeLocal" class="tabBtn tabBtnActive" type="button" style="padding:8px 10px;border-radius:999px;">Local</button>
+                        <button id="studioVideoRpcModePublic" class="tabBtn" type="button" style="padding:8px 10px;border-radius:999px;">Public</button>
+                      </div>
+                      <input id="studioVideoRpc" type="text" value="grpc://127.0.0.1:16110" style="flex:1;min-width:220px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                    </div>
+                  </div>
+                </div>
+
+                <div style="margin-top:10px;">
+                  <div style="font-weight:750;margin-bottom:8px;">Preview</div>
+                  <video id="studioVideoLive" autoplay muted playsinline style="width:100%;border-radius:12px;border:1px solid rgba(112, 199, 186, 0.18);background:rgba(15,21,30,0.35);display:none;"></video>
+                  <video id="studioVideoPlayback" controls playsinline style="width:100%;border-radius:12px;border:1px solid rgba(112, 199, 186, 0.18);background:rgba(15,21,30,0.35);display:none;"></video>
+                  <div id="studioVideoMeta" style="margin-top:6px;font-size:11px;color:var(--text-muted);line-height:1.35;display:none;"></div>
+                </div>
+
+                <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+                  <button id="studioVideoStart" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:linear-gradient(135deg,var(--kaspa-accent) 0%,var(--kaspa-primary) 100%);color:#03181a;font-weight:900;">Record</button>
+                  <button id="studioVideoStop" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Stop</button>
+                  <button id="studioVideoDelete" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid rgba(255, 120, 120, 0.35);background:rgba(255, 80, 80, 0.12);color:var(--text);font-weight:950;">Delete take</button>
+                  <div style="flex:1;"></div>
+                  <button id="studioVideoSave" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Save</button>
+                  <button id="studioVideoExportMp4" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:900;">Export MP4</button>
+                  <button id="studioVideoSend" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:950;">Send</button>
+                </div>
+              </div>
+            </section>
+
+            <section id="pageTransfer" class="page pageActive">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+                <div class="tabs">
+                  <button id="tabSend" class="tabBtn tabBtnActive" type="button">Send</button>
+                  <button id="tabReceive" class="tabBtn" type="button">Receive</button>
+                </div>
+              </div>
+
+              <div id="transferSendPanel" class="card">
+                <div style="font-weight:800;margin-bottom:10px;">Send</div>
+
+                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">File</label>
+                <div id="sendDropZone" class="dropZone">
+                  <input id="sendFile" type="file" style="width:100%;" />
+                  <div class="dropHint" id="sendFileHint">Tip: drag & drop a file here.</div>
+                </div>
+
+                <div style="height:10px;"></div>
+
+                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">From private key (hex)</label>
+                <input id="sendPriv" type="password" autocomplete="off" spellcheck="false" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                <div id="sendPrivAutoHint" style="display:none;margin-top:6px;font-size:11px;color:var(--text-muted);line-height:1.35;">Wallet synced (Signing automatically)</div>
+
+                <div style="height:10px;"></div>
+
+                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">To address</label>
+                <input id="sendTo" type="text" spellcheck="false" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                <div id="sendToResolved" class="knsPreview" style="display:none;"></div>
+
+                <div style="display:flex;gap:10px;margin-top:10px;">
+                  <div style="flex:1;">
+                    <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Amount (KAS)</label>
+                    <input id="sendAmount" type="number" step="0.00000001" value="0.15" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                  </div>
+                  <div style="flex:1;">
+                    <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">RPC URL</label>
+                    <div class="rpcMode" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+                      <button id="sendRpcModeLocal" class="tabBtn tabBtnActive" type="button" style="padding:8px 10px;border-radius:999px;">Local</button>
+                      <button id="sendRpcModePublic" class="tabBtn" type="button" style="padding:8px 10px;border-radius:999px;">Public</button>
+                    </div>
+                    <input id="sendRpc" type="text" value="grpc://127.0.0.1:16110" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                  </div>
+                </div>
+
+                <div class="progressRow">
+                  <button id="sendBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:linear-gradient(135deg,var(--kaspa-accent) 0%,var(--kaspa-primary) 100%);color:#03181a;font-weight:800;">Send</button>
+                  <div class="progressRing">
+                    <svg class="ring" viewBox="0 0 44 44" aria-hidden="true">
+                      <circle class="ring-bg" cx="22" cy="22" r="18"></circle>
+                      <circle class="ring-fg" id="sendRing" cx="22" cy="22" r="18"></circle>
+                    </svg>
+                    <div class="ringText">
+                      <div class="ringTitle">Progress</div>
+                      <div class="ringValue" id="sendProgress">Idle</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="margin-top:10px;font-size:12px;color:var(--text-muted);word-break:break-all;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                    <div style="min-width:0;flex:1;"><span style="opacity:0.85;">TXID:</span> <span id="sendTxid">—</span></div>
+                    <button id="sendCopyTxidBtn" class="copyBtn" type="button">Copy</button>
+                  </div>
+                  <div style="margin-top:6px;">
+                    <a class="link" href="#" id="sendExplorerLink">Open in Explorer</a>
+                  </div>
+                </div>
+              </div>
+
+              <div id="transferReceivePanel" class="card" style="display:none;">
+                <div style="font-weight:800;margin-bottom:10px;">Receive</div>
+
+                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Transaction ID (manifest txid)</label>
+                <input id="recvTx" type="text" spellcheck="false" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                <div style="margin-top:8px;display:flex;justify-content:flex-end;">
+                  <button id="recvCopyTxBtn" class="copyBtn" type="button">Copy</button>
+                </div>
+
+                <div style="display:flex;gap:10px;margin-top:10px;">
+                  <div style="flex:1;">
+                    <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Start block hash (scan anchor)</label>
+                    <input id="recvStart" type="text" spellcheck="false" placeholder="Optional" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                    <div style="margin-top:8px;display:flex;justify-content:flex-end;">
+                      <button id="recvCopyStartBtn" class="copyBtn" type="button">Copy</button>
+                    </div>
+                    <div style="margin-top:6px;font-size:11px;color:var(--text-muted);line-height:1.35;">
+                      <a class="link" href="#" id="explorerTip">Explorer: copy the first “Block hashes” value</a>
+                    </div>
+                  </div>
+                  <div style="flex:1;">
+                    <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">RPC URL</label>
+                    <div class="rpcMode" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+                      <button id="recvRpcModeLocal" class="tabBtn tabBtnActive" type="button" style="padding:8px 10px;border-radius:999px;">Local</button>
+                      <button id="recvRpcModePublic" class="tabBtn" type="button" style="padding:8px 10px;border-radius:999px;">Public</button>
+                    </div>
+                    <input id="recvRpc" type="text" value="grpc://127.0.0.1:16110" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                  </div>
+                </div>
+
+                <div style="height:10px;"></div>
+
+                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Save as</label>
+                <input id="recvOut" type="text" value="received.bin" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+
+                <div style="margin-top:10px;font-size:12px;color:var(--text-muted);word-break:break-all;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                    <div style="min-width:0;flex:1;"><span style="opacity:0.85;">Saved:</span> <span id="recvSavedPath">—</span></div>
+                    <button id="recvCopySavedPathBtn" class="copyBtn" type="button">Copy</button>
+                  </div>
+                </div>
+
+                <div class="progressRow">
+                  <button id="recvBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:800;">Receive</button>
+                  <div class="progressRing">
+                    <svg class="ring" viewBox="0 0 44 44" aria-hidden="true">
+                      <circle class="ring-bg" cx="22" cy="22" r="18"></circle>
+                      <circle class="ring-fg" id="recvRing" cx="22" cy="22" r="18"></circle>
+                    </svg>
+                    <div class="ringText">
+                      <div class="ringTitle">Progress</div>
+                      <div class="ringValue" id="recvStatus">Idle</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="margin-top:10px;display:flex;gap:10px;">
+                  <button id="openBtn" style="cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:700;">Open</button>
+                  <button id="revealBtn" style="cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);font-weight:700;">Reveal</button>
+                </div>
+              </div>
+            </section>
+          </div>
+      </div>
+    </main>
+
+    <div class="footerActionsDock" id="footerActionsDock">
+      <div class="headerWalletBtns">
+        <button id="hdrWalletCreate" class="btn btn-secondary" type="button">Create</button>
+        <button id="hdrWalletImport" class="btn btn-secondary" type="button">Import</button>
+        <button id="hdrWalletLogin" class="btn btn-secondary" type="button">Login</button>
+        <button id="hdrWalletLogout" class="btn btn-secondary" type="button">Logout</button>
+      </div>
+      <button id="clearSessionBtn" class="btn btn-secondary" type="button">Clear session</button>
+    </div>
+
+    <div class="modalOverlay" id="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal">
+        <div class="modalHeader">
+          <div class="modalTitle" id="modalTitle">Notification</div>
+          <button class="modalClose" id="modalClose" type="button">Close</button>
+        </div>
+        <div class="modalBody" id="modalBody"></div>
+        <div class="modalActions" id="modalActions"></div>
+      </div>
+    </div>
+
+    <div class="walletFsOverlay" id="appFsOverlay" aria-hidden="true" style="z-index:9000;">
+      <div class="walletFsPanel" role="dialog" aria-modal="true" aria-labelledby="appFsTitle">
+        <div class="walletFsHeader">
+          <div class="walletFsTitle" id="appFsTitle">App</div>
+          <button class="walletFsClose" id="appFsClose" type="button">Close</button>
+        </div>
+        <div class="walletFsBody" id="appFsBody"></div>
+      </div>
+    </div>
+
+    <div class="walletFsOverlay" id="walletFsOverlay" aria-hidden="true">
+      <div class="walletFsPanel" role="dialog" aria-modal="true" aria-labelledby="walletFsTitle">
+        <div class="walletFsHeader">
+          <div class="walletFsTitle" id="walletFsTitle">Wallet</div>
+          <button class="walletFsClose" id="walletFsClose" type="button">Close</button>
+        </div>
+        <div class="walletFsBody" id="walletFsBody"></div>
+      </div>
+    </div>
+
+    <div class="actionOverlay" id="actionOverlay" aria-hidden="true">
+      <canvas id="actionCanvas" class="actionCanvas"></canvas>
+      <div id="actionNodes" class="actionNodes"></div>
+      <button id="actionClose" class="actionClose" type="button" aria-label="Close">×</button>
+      <div class="actionCenter">
+        <div class="actionBrand">
+          <img id="actionLogo" class="actionLogo" alt="" />
+          <div id="actionTitle" class="actionTitle"></div>
+          <div id="actionSub" class="actionSub"></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="app_mobile.js"></script>
+    <script>
+      (function () {
+        const navTransfer = document.getElementById("navTransfer");
+        const navWallet = document.getElementById("navWallet");
+        const navImport = document.getElementById("navImport");
+        const navStudio = document.getElementById("navStudio");
+
+        const pageTransfer = document.getElementById("pageTransfer");
+        const pageWallet = document.getElementById("pageWallet");
+        const pageImport = document.getElementById("pageImport");
+        const pageStudio = document.getElementById("pageStudio");
+
+        const pagesWrap = document.querySelector(".pages");
+        const overlay = document.getElementById("appFsOverlay");
+        const body = document.getElementById("appFsBody");
+        const title = document.getElementById("appFsTitle");
+        const closeBtn = document.getElementById("appFsClose");
+        const walletFsOverlay = document.getElementById("walletFsOverlay");
+        let currentPage = null;
+
+        const pageTitle = document.getElementById("pageTitle");
+        const status = document.getElementById("status");
+
+        if (!navTransfer || !navWallet || !navImport || !navStudio) return;
+        if (!pageTransfer || !pageWallet || !pageImport || !pageStudio) return;
+        if (!pagesWrap || !overlay || !body || !title || !closeBtn) return;
+
+        function isWalletFsOpen() {
+          return !!walletFsOverlay?.classList?.contains("walletFsOverlayOpen");
+        }
+
+        function closeWalletFsIfOpen() {
+          if (!isWalletFsOpen()) return;
+          try {
+            document.getElementById("walletFsClose")?.click();
+          } catch (_) {}
+        }
+
+        const setActive = (name) => {
+          const isTransfer = name === "transfer";
+          const isWallet = name === "wallet";
+          const isImport = name === "import";
+          const isStudio = name === "studio";
+
+          pageTransfer.className = `page ${isTransfer ? "pageActive" : ""}`.trim();
+          pageWallet.className = `page ${isWallet ? "pageActive" : ""}`.trim();
+          pageImport.className = `page ${isImport ? "pageActive" : ""}`.trim();
+          pageStudio.className = `page ${isStudio ? "pageActive" : ""}`.trim();
+
+          navTransfer.className = `navBtn ${isTransfer ? "navBtnActive" : ""}`.trim();
+          navWallet.className = `navBtn ${isWallet ? "navBtnActive" : ""}`.trim();
+          navImport.className = `navBtn ${isImport ? "navBtnActive" : ""}`.trim();
+          navStudio.className = `navBtn ${isStudio ? "navBtnActive" : ""}`.trim();
+
+          if (pageTitle) pageTitle.textContent = isTransfer ? "Transfer" : isWallet ? "Wallet" : isImport ? "Import" : "Studio";
+          if (status) {
+            status.textContent =
+              isTransfer
+                ? "Send or receive a file using your local Kaspa node RPC."
+                : isWallet
+                  ? "Manage your wallet, balance, and transactions."
+                  : isImport
+                    ? "Import node tools and configure local components."
+                    : "Record and send audio/video. Use wallet sync for automatic signing.";
+          }
+        };
+
+        function openAppFs(name) {
+          closeWalletFsIfOpen();
+          setActive(name);
+          const next = name === "transfer" ? pageTransfer : name === "wallet" ? pageWallet : name === "import" ? pageImport : pageStudio;
+          if (!next) return;
+
+          overlay.classList.toggle("appFsModeWallet", name === "wallet");
+          overlay.classList.toggle("appFsModeTransfer", name === "transfer");
+          overlay.classList.toggle("appFsModeImport", name === "import");
+          overlay.classList.toggle("appFsModeStudio", name === "studio");
+
+          if (currentPage && currentPage.parentElement !== pagesWrap) {
+            pagesWrap.appendChild(currentPage);
+          }
+          currentPage = next;
+
+          body.innerHTML = "";
+          title.textContent = name === "transfer" ? "Transfer" : name === "wallet" ? "Wallet" : name === "import" ? "Import" : "Studio";
+          currentPage.className = "page pageActive";
+          body.appendChild(currentPage);
+
+          overlay.classList.add("walletFsOverlayOpen");
+          overlay.setAttribute("aria-hidden", "false");
+          closeBtn.focus();
+        }
+
+        function closeAppFs() {
+          if (isWalletFsOpen()) {
+            closeWalletFsIfOpen();
+            return;
+          }
+          overlay.classList.remove("walletFsOverlayOpen");
+          overlay.setAttribute("aria-hidden", "true");
+          body.innerHTML = "";
+          if (currentPage) pagesWrap.appendChild(currentPage);
+          currentPage = null;
+        }
+
+        const intercept = (name) => (e) => {
+          try {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            e.stopPropagation();
+          } catch (_) {}
+          openAppFs(name);
+        };
+
+        navTransfer.addEventListener("click", intercept("transfer"), true);
+        navWallet.addEventListener("click", intercept("wallet"), true);
+        navImport.addEventListener("click", intercept("import"), true);
+        navStudio.addEventListener("click", intercept("studio"), true);
+
+        closeBtn.addEventListener("click", closeAppFs);
+        overlay.addEventListener("click", (e) => {
+          if (e.target === overlay) closeAppFs();
+        });
+        document.addEventListener("keydown", (e) => {
+          if (e.key !== "Escape") return;
+          if (!overlay.classList.contains("walletFsOverlayOpen")) return;
+          if (isWalletFsOpen()) return;
+          closeAppFs();
+        });
+
+        function setTransferTab(name) {
+          const isSend = name === "send";
+          const tabSend = document.getElementById("tabSend");
+          const tabReceive = document.getElementById("tabReceive");
+          const sendPanel = document.getElementById("transferSendPanel");
+          const receivePanel = document.getElementById("transferReceivePanel");
+          if (!tabSend || !tabReceive || !sendPanel || !receivePanel) return;
+          tabSend.className = `tabBtn ${isSend ? "tabBtnActive" : ""}`.trim();
+          tabReceive.className = `tabBtn ${!isSend ? "tabBtnActive" : ""}`.trim();
+          sendPanel.style.display = isSend ? "block" : "none";
+          receivePanel.style.display = isSend ? "none" : "block";
+        }
+
+        document.addEventListener(
+          "click",
+          (e) => {
+            const btn = e.target?.closest?.("#tabSend, #tabReceive");
+            if (!btn) return;
+            try {
+              e.preventDefault();
+              e.stopImmediatePropagation();
+              e.stopPropagation();
+            } catch (_) {}
+            setTransferTab(btn.id === "tabReceive" ? "receive" : "send");
+          },
+          true
+        );
+
+        requestAnimationFrame(() => openAppFs("transfer"));
+      })();
+    </script>
+
+    <script>
+      (function () {
+        const overlay = document.getElementById("walletFsOverlay");
+        const panel = overlay?.querySelector(".walletFsPanel");
+        const body = document.getElementById("walletFsBody");
+        const title = document.getElementById("walletFsTitle");
+        const closeBtn = document.getElementById("walletFsClose");
+
+        const navManage = document.getElementById("navManage");
+
+        let prevActiveNavId = null;
+
+        function isAppModalOpen() {
+          const mo = document.getElementById("modalOverlay");
+          if (!mo) return false;
+          return mo.style.display && mo.style.display !== "none";
+        }
+
+        const stash = document.getElementById("walletOverviewStash");
+        const sendSection = document.getElementById("walletSendSection");
+        const receiveSection = document.getElementById("walletReceiveSection");
+        const receiveSheet = document.getElementById("walletReceiveSheet");
+        const derivedAddressEl = document.getElementById("walletDerivedAddress");
+        const receiveQrSvgEl = document.getElementById("walletReceiveQrSvg");
+        const receiveQrFallbackEl = document.getElementById("walletReceiveQrFallback");
+        const receiveAddrTextEl = document.getElementById("walletReceiveAddrText");
+        const receiveCopyBtnEl = document.getElementById("walletReceiveCopyBtn");
+        const receiveShareBtnEl = document.getElementById("walletReceiveShareBtn");
+        const balanceSection = document.getElementById("walletBalanceSection");
+        const txHistorySection = document.getElementById("walletTxHistorySection");
+        const accountSection = document.getElementById("walletAccountSection");
+        const manageCreateSection = document.getElementById("walletManageCreateSection");
+        const manageImportSection = document.getElementById("walletManageImportSection");
+        const manageDataSection = document.getElementById("walletManageDataSection");
+        const walletShell = document.getElementById("walletShell");
+        const walletHeaderTop = walletShell?.querySelector?.(".walletHeaderTop");
+        const walletHeaderGrid = walletShell?.querySelector?.(".walletHeaderGrid");
+        const walletActionRow = walletShell?.querySelector?.(".walletActionRow");
+
+        const globalCreateBtn = document.getElementById("hdrWalletCreate");
+        const globalImportBtn = document.getElementById("hdrWalletImport");
+        const globalLoginBtn = document.getElementById("hdrWalletLogin");
+        const globalLogoutBtn = document.getElementById("hdrWalletLogout");
+        const heroSendBtn = document.getElementById("walletHeroSendBtn");
+        const heroReceiveBtn = document.getElementById("walletHeroReceiveBtn");
+        const heroTxBtn = document.getElementById("walletHeroTxBtn");
+        const heroAccountBtn = document.getElementById("walletHeroAccountBtn");
+        const hdrCreateBtn = document.getElementById("walletHdrCreate");
+        const hdrImportBtn = document.getElementById("walletHdrImport");
+        const hdrDeleteBtn = document.getElementById("walletHdrDelete");
+
+        if (!overlay || !panel || !body || !title || !closeBtn || !stash || !sendSection || !receiveSection || !receiveSheet || !derivedAddressEl || !txHistorySection || !accountSection || !manageCreateSection || !manageImportSection || !manageDataSection || !walletShell || !walletHeaderTop || !walletHeaderGrid || !walletActionRow) return;
+
+        function restoreWalletHeader() {
+          try {
+            if (walletHeaderTop.parentElement !== walletShell) walletShell.insertBefore(walletHeaderTop, walletActionRow);
+            if (walletHeaderGrid.parentElement !== walletShell) walletShell.insertBefore(walletHeaderGrid, walletActionRow);
+          } catch (_) {}
+        }
+
+        function stashAll() {
+          if (sendSection.parentElement !== stash) stash.appendChild(sendSection);
+          if (receiveSection.parentElement !== stash) stash.appendChild(receiveSection);
+          if (receiveSheet.parentElement !== stash) stash.appendChild(receiveSheet);
+          if (balanceSection && balanceSection.parentElement !== stash) stash.appendChild(balanceSection);
+          if (txHistorySection.parentElement !== stash) stash.appendChild(txHistorySection);
+          if (accountSection.parentElement !== stash) stash.appendChild(accountSection);
+          if (manageCreateSection.parentElement !== stash) stash.appendChild(manageCreateSection);
+          if (manageImportSection.parentElement !== stash) stash.appendChild(manageImportSection);
+          if (manageDataSection.parentElement !== stash) stash.appendChild(manageDataSection);
+          restoreWalletHeader();
+          receiveSection.style.display = "none";
+          receiveSheet.style.display = "none";
+          txHistorySection.style.display = "none";
+          accountSection.style.display = "none";
+          manageCreateSection.style.display = "none";
+          manageImportSection.style.display = "none";
+          manageDataSection.style.display = "none";
+        }
+
+        function copyText(text) {
+          const t = String(text || "").trim();
+          if (!t) return Promise.resolve(false);
+          if (navigator?.clipboard?.writeText) {
+            return navigator.clipboard
+              .writeText(t)
+              .then(() => true)
+              .catch(() => false);
+          }
+          try {
+            const ta = document.createElement("textarea");
+            ta.value = t;
+            ta.setAttribute("readonly", "true");
+            ta.style.position = "fixed";
+            ta.style.left = "-9999px";
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+            return Promise.resolve(true);
+          } catch (_) {
+            return Promise.resolve(false);
+          }
+        }
+
+        async function updateReceiveSheet() {
+          const addr = String(derivedAddressEl.textContent || "").trim();
+          if (receiveAddrTextEl) receiveAddrTextEl.textContent = addr || "—";
+          if (!receiveQrSvgEl) return;
+          if (!addr || addr === "—") {
+            receiveQrSvgEl.innerHTML = "";
+            if (receiveQrFallbackEl) receiveQrFallbackEl.style.display = "block";
+            return;
+          }
+
+          try {
+            const tauri = window.__TAURI__?.tauri;
+            if (!tauri?.invoke) throw new Error("tauri not available");
+            const svg = await tauri.invoke("wallet_qr_svg", { data: addr });
+            receiveQrSvgEl.innerHTML = String(svg || "");
+            if (receiveQrFallbackEl) receiveQrFallbackEl.style.display = receiveQrSvgEl.innerHTML ? "none" : "block";
+          } catch (_) {
+            receiveQrSvgEl.innerHTML = "";
+            if (receiveQrFallbackEl) receiveQrFallbackEl.style.display = "block";
+          }
+        }
+
+        function openWalletFs(kind) {
+          body.innerHTML = "";
+          overlay.classList.remove("walletFsModeSend");
+          overlay.classList.remove("walletFsModeReceive");
+          overlay.classList.remove("walletFsModeAuth");
+          if (kind === "send") {
+            title.textContent = "Send";
+            sendSection.style.display = "";
+            body.appendChild(sendSection);
+            overlay.classList.add("walletFsModeSend");
+          } else if (kind === "tx") {
+            title.textContent = "Transaction History";
+            txHistorySection.style.display = "";
+            body.appendChild(txHistorySection);
+          } else if (kind === "account") {
+            title.textContent = "Account";
+            accountSection.style.display = "";
+            body.appendChild(accountSection);
+          } else if (kind === "manage") {
+            title.textContent = "Manage wallet";
+            manageCreateSection.style.display = "";
+            manageImportSection.style.display = "";
+            manageDataSection.style.display = "";
+            body.appendChild(manageCreateSection);
+            body.appendChild(manageImportSection);
+            body.appendChild(manageDataSection);
+          } else if (kind === "create") {
+            title.textContent = "Create profile";
+            manageCreateSection.style.display = "";
+            body.appendChild(manageCreateSection);
+          } else if (kind === "import") {
+            title.textContent = "Import profile";
+            manageImportSection.style.display = "";
+            body.appendChild(manageImportSection);
+          } else if (kind === "delete") {
+            title.textContent = "Delete profile";
+            manageDataSection.style.display = "";
+            body.appendChild(manageDataSection);
+          } else if (kind === "login") {
+            title.textContent = "Login";
+            body.appendChild(walletHeaderTop);
+            body.appendChild(walletHeaderGrid);
+            overlay.classList.add("walletFsModeAuth");
+          } else {
+            title.textContent = "Receive";
+            receiveSheet.style.display = "grid";
+            updateReceiveSheet();
+            body.appendChild(receiveSheet);
+            overlay.classList.add("walletFsModeReceive");
+          }
+          overlay.classList.add("walletFsOverlayOpen");
+          overlay.setAttribute("aria-hidden", "false");
+          closeBtn.focus();
+        }
+
+        function closeWalletFs() {
+          if (isAppModalOpen()) return;
+          overlay.classList.remove("walletFsOverlayOpen");
+          overlay.setAttribute("aria-hidden", "true");
+          if (navManage) navManage.classList.remove("navBtnActive");
+          try {
+            if (prevActiveNavId) {
+              document.getElementById(prevActiveNavId)?.classList?.add("navBtnActive");
+            }
+          } catch (_) {}
+          prevActiveNavId = null;
+          stashAll();
+        }
+
+        if (navManage) {
+          navManage.addEventListener(
+            "click",
+            (e) => {
+              try {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                e.stopPropagation();
+              } catch (_) {}
+              try {
+                const active = document.querySelector(".nav-links .navBtn.navBtnActive");
+                const activeId = String(active?.id || "").trim();
+                prevActiveNavId = activeId && activeId !== "navManage" ? activeId : null;
+              } catch (_) {
+                prevActiveNavId = null;
+              }
+
+              try {
+                document.querySelectorAll(".nav-links .navBtn").forEach((b) => b.classList.remove("navBtnActive"));
+              } catch (_) {}
+
+              navManage.classList.add("navBtnActive");
+              openWalletFs("manage");
+            },
+            true
+          );
+        }
+
+        document.addEventListener(
+          "click",
+          (e) => {
+            const t = e.target;
+            const btn = t?.closest?.(
+              "#walletHeroSendBtn, #walletHeroReceiveBtn, #walletHeroTxBtn, #walletHeroAccountBtn, #walletHeroManageBtn"
+            );
+            if (!btn) return;
+            try {
+              e.preventDefault();
+              e.stopImmediatePropagation();
+              e.stopPropagation();
+            } catch (_) {}
+
+            const id = btn.id;
+            if (id === "walletHeroSendBtn") openWalletFs("send");
+            else if (id === "walletHeroReceiveBtn") openWalletFs("receive");
+            else if (id === "walletHeroTxBtn") openWalletFs("tx");
+            else if (id === "walletHeroAccountBtn") openWalletFs("account");
+            else if (id === "walletHeroManageBtn") openWalletFs("manage");
+          },
+          true
+        );
+
+        if (hdrCreateBtn) {
+          hdrCreateBtn.addEventListener(
+            "click",
+            (e) => {
+              try {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                e.stopPropagation();
+              } catch (_) {}
+              openWalletFs("create");
+            },
+            true
+          );
+        }
+
+        if (hdrImportBtn) {
+          hdrImportBtn.addEventListener(
+            "click",
+            (e) => {
+              try {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                e.stopPropagation();
+              } catch (_) {}
+              openWalletFs("import");
+            },
+            true
+          );
+        }
+
+        if (hdrDeleteBtn) {
+          hdrDeleteBtn.addEventListener(
+            "click",
+            (e) => {
+              try {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                e.stopPropagation();
+              } catch (_) {}
+              openWalletFs("delete");
+            },
+            true
+          );
+        }
+
+        if (globalCreateBtn) globalCreateBtn.addEventListener("click", () => openWalletFs("create"), true);
+        if (globalImportBtn) globalImportBtn.addEventListener("click", () => openWalletFs("import"), true);
+        if (globalLoginBtn) globalLoginBtn.addEventListener("click", () => openWalletFs("login"), true);
+        if (globalLogoutBtn) {
+          globalLogoutBtn.addEventListener(
+            "click",
+            (e) => {
+              try {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                e.stopPropagation();
+              } catch (_) {}
+              document.getElementById("walletLockBtn")?.click();
+            },
+            true
+          );
+        }
+
+        document.addEventListener(
+          "click",
+          (e) => {
+            const a = e.target?.closest?.('a[href="#walletSendSection"], a[href="#walletReceiveSection"]');
+            if (!a) return;
+            try {
+              e.preventDefault();
+              e.stopPropagation();
+            } catch (_) {}
+            const href = a.getAttribute("href");
+            openWalletFs(href === "#walletSendSection" ? "send" : "receive");
+          },
+          true
+        );
+
+        closeBtn.addEventListener("click", closeWalletFs);
+        overlay.addEventListener("click", (e) => {
+          if (e.target === overlay) closeWalletFs();
+        });
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape" && overlay.classList.contains("walletFsOverlayOpen")) closeWalletFs();
+        });
+
+        if (receiveCopyBtnEl) {
+          receiveCopyBtnEl.addEventListener("click", async () => {
+            const addr = String(derivedAddressEl.textContent || "").trim();
+            await copyText(addr);
+          });
+        }
+
+        if (receiveShareBtnEl) {
+          receiveShareBtnEl.addEventListener("click", async () => {
+            const addr = String(derivedAddressEl.textContent || "").trim();
+            if (!addr || addr === "—") return;
+            if (navigator?.share) {
+              try {
+                await navigator.share({ text: addr });
+                return;
+              } catch (_) {}
+            }
+            await copyText(addr);
+          });
+        }
+
+        stashAll();
+      })();
+    </script>
+  </body>
+</html>

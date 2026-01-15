@@ -9,9 +9,9 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Encode an audio file and send it over the Kaspa network
+    /// Encode a file and send it over the Kaspa network
     Send {
-        /// Path to the audio file to send
+        /// Path to the file to send
         input_file: String,
 
         /// Sender private key (32-byte hex, Schnorr)
@@ -60,13 +60,13 @@ pub enum Commands {
         start_block_hash_timeout_secs: u64,
     },
     
-    /// Receive and decode an audio file from the Kaspa network
+    /// Receive and decode a file from the Kaspa network
     Receive {
-        /// Transaction ID containing the audio data
+        /// Transaction ID containing the file data
         tx_id: String,
         
-        /// Output file path (default: output.mp3)
-        #[arg(short, long, default_value = "output.mp3")]
+        /// Output file path (default: output.bin)
+        #[arg(short, long, default_value = "output.bin")]
         output: String,
         
         /// Kaspa node RPC URL

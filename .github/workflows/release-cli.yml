@@ -48,11 +48,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          BIN_NAME="kaspa_audio_transfer${{ matrix.bin_ext }}"
-          cp "target/release/${BIN_NAME}" "dist/kaspa_audio_transfer-${{ matrix.artifact_suffix }}${{ matrix.bin_ext }}"
+          BIN_NAME="kaspa_data_transfer${{ matrix.bin_ext }}"
+          cp "target/release/${BIN_NAME}" "dist/kaspa_data_transfer-${{ matrix.artifact_suffix }}${{ matrix.bin_ext }}"
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/kaspa_audio_transfer-${{ matrix.artifact_suffix }}${{ matrix.bin_ext }}
+            dist/kaspa_data_transfer-${{ matrix.artifact_suffix }}${{ matrix.bin_ext }}

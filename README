@@ -1,21 +1,7 @@
-**Kaspa Node must be synced**
+This file is kept for backwards compatibility.
 
-## Usage
-### SendingFile
+Please use the repository root `README.md` for the current, verified build-from-source instructions for:
 
-.\kaspa_audio_transfer.exe send "full path here" --from-private-key <a Priv here> --to-address <any kaspa address here> --amount 1 
-
-```powershell
-# Basic usage
-
-
-
-It will give you the  TX ID which you then use to get block hash on explorer. Use the first Block Hash
-
-### ReceiveFile
-
-.\kaspa_audio_transfer.exe receive <tx it gives at bottom> --output <file.type> --start-block-hash <first block hashof tx>
-
-
-### Retrieve music file real example
-.\kaspa_audio_transfer.exe receive f30623784fd7be906ce7cee1c1f172dd45035e08a2c816402ed89365724e9010 --output kaspa_isKing.mp3 --start-block-hash b8e8f9e94d274c350a59b0f596fcafc6b423b7bdda57e3de9b14bdea5b7ad94b
+- CLI
+- Desktop (Tauri)
+- Android (Tauri Mobile)

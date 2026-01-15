@@ -177,6 +177,7 @@
 
       let lastReceivedPath = "";
       let selectedSendFile = null;
+      let selectedSendFilePath = "";
 
       let nodeBundleDir = "";
 
@@ -205,9 +206,9 @@
       }
 
       async function openExternal(url) {
-        const shell = window.__TAURI__?.shell;
-        if (shell?.open) {
-          await shell.open(url);
+        const opener = window.__TAURI__?.opener;
+        if (opener?.openUrl) {
+          await opener.openUrl(url);
           return;
         }
         window.open(url, "_blank");
@@ -229,7 +230,7 @@
         const value = String(text || "").trim();
         if (!value || value === "—") throw new Error("Nothing to copy");
 
-        const tauriClipboard = window.__TAURI__?.clipboard;
+        const tauriClipboard = window.__TAURI__?.clipboardManager;
         if (tauriClipboard?.writeText) {
           await tauriClipboard.writeText(value);
           return;
@@ -319,7 +320,7 @@
       }
 
       async function init() {
-        const tauri = window.__TAURI__?.tauri;
+        const tauri = window.__TAURI__?.core || window.__TAURI__?.tauri;
         const eventApi = window.__TAURI__?.event;
         const dialogApi = window.__TAURI__?.dialog;
         const fsApi = window.__TAURI__?.fs;
@@ -338,6 +339,196 @@
         let actionCleanup = null;
         let actionOpen = false;
 
+        let actionTimingEl = null;
+        let actionTimingInterval = 0;
+        let actionTimingStartMs = 0;
+        let actionLastProgress = null;
+
+        let actionProgressWrapEl = null;
+        let actionProgressTextEl = null;
+        let actionProgressBarOuterEl = null;
+        let actionProgressBarInnerEl = null;
+
+        function ensureActionTimingEl() {
+          if (actionTimingEl) return actionTimingEl;
+          if (!actionSubEl) return null;
+          const el = document.createElement("div");
+          el.style.marginTop = "10px";
+          el.style.opacity = "0.9";
+          el.style.fontSize = "13px";
+          el.style.lineHeight = "1.2";
+          el.style.textAlign = "center";
+          el.style.fontFamily = "inherit";
+          actionSubEl.insertAdjacentElement("afterend", el);
+          actionTimingEl = el;
+          return el;
+        }
+
+        function ensureActionProgressEls() {
+          if (actionProgressWrapEl) return actionProgressWrapEl;
+          const timingEl = ensureActionTimingEl();
+          if (!timingEl) return null;
+
+          const wrap = document.createElement("div");
+          wrap.style.marginTop = "10px";
+          wrap.style.display = "flex";
+          wrap.style.flexDirection = "column";
+          wrap.style.gap = "8px";
+          wrap.style.alignItems = "center";
+          wrap.style.justifyContent = "center";
+
+          const text = document.createElement("div");
+          text.style.opacity = "0.92";
+          text.style.fontSize = "13px";
+          text.style.lineHeight = "1.2";
+          text.style.textAlign = "center";
+          text.style.fontFamily = "inherit";
+
+          const outer = document.createElement("div");
+          outer.style.width = "min(520px, 72vw)";
+          outer.style.height = "10px";
+          outer.style.borderRadius = "999px";
+          outer.style.background = "rgba(255,255,255,0.10)";
+          outer.style.border = "1px solid rgba(255,255,255,0.14)";
+          outer.style.overflow = "hidden";
+
+          const inner = document.createElement("div");
+          inner.style.height = "100%";
+          inner.style.width = "0%";
+          inner.style.borderRadius = "999px";
+          inner.style.background = "linear-gradient(90deg, rgba(73,234,203,0.95), rgba(73,234,203,0.55))";
+          inner.style.boxShadow = "0 0 24px rgba(73,234,203,0.18)";
+          inner.style.transition = "width 220ms ease";
+          outer.appendChild(inner);
+
+          wrap.appendChild(text);
+          wrap.appendChild(outer);
+
+          timingEl.insertAdjacentElement("afterend", wrap);
+
+          actionProgressWrapEl = wrap;
+          actionProgressTextEl = text;
+          actionProgressBarOuterEl = outer;
+          actionProgressBarInnerEl = inner;
+
+          return wrap;
+        }
+
+        function formatDurationSec(totalSec) {
+          const s = Math.max(0, Math.floor(Number(totalSec) || 0));
+          const hh = Math.floor(s / 3600);
+          const mm = Math.floor((s % 3600) / 60);
+          const ss = s % 60;
+          if (hh > 0) return `${hh}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+          return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+        }
+
+        function computeEtaSec() {
+          if (!actionLastProgress) return null;
+          const total = Number(actionLastProgress.total || 0);
+          const done = Number(actionLastProgress.done || 0);
+          const samples = Array.isArray(actionLastProgress.samples) ? actionLastProgress.samples : [];
+          if (!Number.isFinite(total) || total <= 0) return null;
+          if (!Number.isFinite(done) || done <= 0) return null;
+          if (done >= total) return 0;
+
+          const computeFromRate = (rate) => {
+            if (!Number.isFinite(rate) || rate <= 0) return null;
+            const remaining = total - done;
+            return Math.max(0, Math.round(remaining / rate));
+          };
+
+          if (samples.length >= 2) {
+            const a = samples[0];
+            const b = samples[samples.length - 1];
+            if (a && b) {
+              const dt = (b.t - a.t) / 1000;
+              const dd = b.done - a.done;
+              if (Number.isFinite(dt) && dt > 0.15 && Number.isFinite(dd) && dd > 0) {
+                const eta = computeFromRate(dd / dt);
+                if (eta !== null) return eta;
+              }
+            }
+          }
+
+          const now = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+          const start = Number(actionTimingStartMs || 0);
+          const elapsed = start > 0 ? (now - start) / 1000 : 0;
+          if (Number.isFinite(elapsed) && elapsed > 0.75) {
+            const eta = computeFromRate(done / elapsed);
+            if (eta !== null) return eta;
+          }
+
+          return null;
+        }
+
+        function updateActionTimingUi() {
+          if (!actionOpen) return;
+          const el = ensureActionTimingEl();
+          if (!el) return;
+
+          const now = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+          const start = actionTimingStartMs || now;
+          const elapsedSec = Math.max(0, Math.floor((now - start) / 1000));
+          const etaSec = computeEtaSec();
+
+          const elapsedText = formatDurationSec(elapsedSec);
+          const etaText = (etaSec === null) ? "—" : formatDurationSec(etaSec);
+
+          el.textContent = `Elapsed: ${elapsedText}  |  ETA: ${etaText}`;
+
+          updateActionProgressUi();
+        }
+
+        function updateActionProgressUi() {
+          if (!actionOpen) return;
+          const wrap = ensureActionProgressEls();
+          if (!wrap) return;
+
+          const total = Number(actionLastProgress && actionLastProgress.total);
+          const done = Number(actionLastProgress && actionLastProgress.done);
+          const kind = actionLastProgress && actionLastProgress.kind;
+          if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(done) || done < 0) {
+            try {
+              if (actionProgressTextEl) actionProgressTextEl.textContent = "Progress: —";
+              if (actionProgressBarInnerEl) actionProgressBarInnerEl.style.width = "0%";
+            } catch (_) {}
+            return;
+          }
+
+          const clampedDone = Math.max(0, Math.min(total, done));
+          const pct = Math.max(0, Math.min(1, total > 0 ? (clampedDone / total) : 0));
+          const pctText = `${Math.round(pct * 100)}%`;
+          const label = kind === "receive" ? "Receiving" : "Publishing";
+
+          try {
+            if (actionProgressTextEl) actionProgressTextEl.textContent = `${label}: ${clampedDone}/${total} chunks (${pctText})`;
+            if (actionProgressBarInnerEl) actionProgressBarInnerEl.style.width = `${(pct * 100).toFixed(2)}%`;
+          } catch (_) {}
+        }
+
+        function startActionTiming() {
+          actionTimingStartMs = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+          actionLastProgress = null;
+          try {
+            ensureActionProgressEls();
+            if (actionProgressTextEl) actionProgressTextEl.textContent = "Progress: —";
+            if (actionProgressBarInnerEl) actionProgressBarInnerEl.style.width = "0%";
+          } catch (_) {}
+          try {
+            if (actionTimingInterval) window.clearInterval(actionTimingInterval);
+          } catch (_) {}
+          actionTimingInterval = window.setInterval(updateActionTimingUi, 1000);
+          updateActionTimingUi();
+        }
+
+        function stopActionTiming() {
+          try {
+            if (actionTimingInterval) window.clearInterval(actionTimingInterval);
+          } catch (_) {}
+          actionTimingInterval = 0;
+        }
+
         function hideActionOverlay() {
           if (!actionOverlayEl) return;
           actionOpen = false;
@@ -346,6 +537,14 @@
           if (actionTitleEl) actionTitleEl.textContent = "";
           if (actionSubEl) actionSubEl.textContent = "";
           if (actionLogoEl) actionLogoEl.removeAttribute("src");
+          stopActionTiming();
+          try {
+            if (actionTimingEl) actionTimingEl.textContent = "";
+          } catch (_) {}
+          try {
+            if (actionProgressTextEl) actionProgressTextEl.textContent = "";
+            if (actionProgressBarInnerEl) actionProgressBarInnerEl.style.width = "0%";
+          } catch (_) {}
           try {
             if (actionCleanup) actionCleanup();
           } catch (_) {}
@@ -549,6 +748,8 @@
             if (actionCleanup) actionCleanup();
           } catch (_) {}
           actionCleanup = startActionDagAnimation({ logoSrc });
+
+          startActionTiming();
         }
 
         if (actionCloseEl) {
@@ -730,6 +931,84 @@
         if (!tauri?.invoke) {
           setError("Tauri API not available. Are you running the desktop app through Tauri?");
           return;
+        }
+
+        if (eventApi?.listen) {
+          try {
+            await eventApi.listen("tauri://file-drop", (e) => {
+              try {
+                const payload = e && e.payload;
+                const paths = Array.isArray(payload) ? payload : [];
+                if (paths.length > 0) {
+                  setPickedFilePath(String(paths[0] || ""));
+                }
+              } catch (_) {
+                // ignore
+              }
+            });
+          } catch (_) {
+            // ignore
+          }
+        }
+
+        if (eventApi?.listen) {
+          try {
+            await eventApi.listen("kaspa_send_progress", (e) => {
+              try {
+                const p = e && e.payload;
+                const done = Number(p && p.submitted_chunks);
+                const total = Number(p && p.total_chunks);
+                if (!Number.isFinite(done) || done < 0) return;
+                if (!Number.isFinite(total) || total <= 0) return;
+                const now = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+
+                if (!actionLastProgress || actionLastProgress.kind !== "send") {
+                  actionLastProgress = { kind: "send", done, total, samples: [{ t: now, done }] };
+                } else {
+                  actionLastProgress.done = done;
+                  actionLastProgress.total = total;
+                  const s = Array.isArray(actionLastProgress.samples) ? actionLastProgress.samples : [];
+                  s.push({ t: now, done });
+                  while (s.length > 6) s.shift();
+                  actionLastProgress.samples = s;
+                }
+                updateActionTimingUi();
+              } catch (_) {
+                // ignore
+              }
+            });
+          } catch (_) {
+            // ignore
+          }
+
+          try {
+            await eventApi.listen("kaspa_receive_progress", (e) => {
+              try {
+                const p = e && e.payload;
+                const done = Number(p && p.found_chunks);
+                const total = Number(p && p.total_chunks);
+                if (!Number.isFinite(done) || done < 0) return;
+                if (!Number.isFinite(total) || total <= 0) return;
+                const now = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+
+                if (!actionLastProgress || actionLastProgress.kind !== "receive") {
+                  actionLastProgress = { kind: "receive", done, total, samples: [{ t: now, done }] };
+                } else {
+                  actionLastProgress.done = done;
+                  actionLastProgress.total = total;
+                  const s = Array.isArray(actionLastProgress.samples) ? actionLastProgress.samples : [];
+                  s.push({ t: now, done });
+                  while (s.length > 6) s.shift();
+                  actionLastProgress.samples = s;
+                }
+                updateActionTimingUi();
+              } catch (_) {
+                // ignore
+              }
+            });
+          } catch (_) {
+            // ignore
+          }
         }
 
         async function refreshNodeBundleDir() {
@@ -1040,10 +1319,31 @@
           if (walletShellEl) walletShellEl.classList.toggle("walletShellOverview", isOverview);
         }
 
+        function setStudioTab(name) {
+          const isAudio = name === "audio";
+          const isVideo = name === "video";
+
+          if (studioTabAudioEl) studioTabAudioEl.className = `tabBtn ${isAudio ? "tabBtnActive" : ""}`.trim();
+          if (studioTabVideoEl) studioTabVideoEl.className = `tabBtn ${isVideo ? "tabBtnActive" : ""}`.trim();
+          if (studioAudioPanelEl) studioAudioPanelEl.style.display = isAudio ? "block" : "none";
+          if (studioVideoPanelEl) studioVideoPanelEl.style.display = isVideo ? "block" : "none";
+        }
+
         function syncWalletHeroBalance() {
           if (!walletHeroBalanceEl || !walletBalanceEl) return;
           const t = String(walletBalanceEl.textContent || "—").trim();
           walletHeroBalanceEl.textContent = t || "—";
+        }
+
+        function openWalletManageSection(sectionEl) {
+          setWalletTab("manage");
+          try {
+            if (sectionEl && typeof sectionEl.scrollIntoView === "function") {
+              sectionEl.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+          } catch (_) {
+            // ignore
+          }
         }
 
         if (walletTabOverviewEl) walletTabOverviewEl.addEventListener("click", () => {
@@ -1053,8 +1353,17 @@
         if (walletTabManageEl) walletTabManageEl.addEventListener("click", () => setWalletTab("manage"));
         if (walletTabAdvancedEl) walletTabAdvancedEl.addEventListener("click", () => setWalletTab("advanced"));
 
+        if (studioTabAudioEl) studioTabAudioEl.addEventListener("click", () => setStudioTab("audio"));
+        if (studioTabVideoEl) studioTabVideoEl.addEventListener("click", () => setStudioTab("video"));
+
+        if (walletHdrCreateEl) walletHdrCreateEl.addEventListener("click", () => openWalletManageSection(walletManageCreateSectionEl));
+        if (walletHdrImportEl) walletHdrImportEl.addEventListener("click", () => openWalletManageSection(walletManageImportSectionEl));
+        if (walletHdrDeleteEl) walletHdrDeleteEl.addEventListener("click", () => openWalletManageSection(walletManageDataSectionEl));
+
         setWalletTab("overview");
         syncWalletHeroBalance();
+
+        setStudioTab("audio");
 
         async function refreshWalletStatus() {
           try {
@@ -1351,7 +1660,7 @@
         }
 
         async function saveBlobToFile(blob, suggestedName, filters) {
-          if (!dialogApi?.save || !fsApi?.writeBinaryFile) {
+          if (!dialogApi?.save || !fsApi?.writeFile) {
             throw new Error("Save is not available (missing dialog/fs API)");
           }
           const path = await dialogApi.save({
@@ -1361,23 +1670,23 @@
           if (!path) return null;
           const buf = await blob.arrayBuffer();
           const bytes = new Uint8Array(buf);
-          await fsApi.writeBinaryFile({ path, contents: bytes });
+          await fsApi.writeFile(String(path), bytes);
           return String(path);
         }
 
         async function writeBlobToPath(blob, path) {
-          if (!fsApi?.writeBinaryFile) {
+          if (!fsApi?.writeFile) {
             throw new Error("File write is not available (missing fs API)");
           }
           const buf = await blob.arrayBuffer();
           const bytes = new Uint8Array(buf);
-          await fsApi.writeBinaryFile({ path, contents: bytes });
+          await fsApi.writeFile(String(path), bytes);
         }
 
         async function ensureStudioTempFilePath(blob, fileName) {
           if (!blob) throw new Error("missing blob");
-          const fileB64 = await readBlobDataUrl(blob);
-          const tmpPath = await tauri.invoke("studio_write_temp_file_b64", { fileName, fileB64 });
+          const tmpPath = await tauri.invoke("studio_temp_path", { fileName });
+          await writeBlobToPath(blob, String(tmpPath));
           return String(tmpPath);
         }
 
@@ -1823,11 +2132,12 @@
                         const ts = new Date().toISOString().replace(/[:.]/g, "-");
                         const ext = (studioAudioBlob.type || "").includes("ogg") ? "ogg" : "webm";
                         const fileName = `kat_audio_${ts}.${ext}`;
-                        const fileB64 = await readBlobDataUrl(studioAudioBlob);
-                        const txid = await tauri.invoke("wallet_send_file_b64", {
-                          window: null,
+                        if (!studioAudioFilePath) {
+                          studioAudioFilePath = await ensureStudioTempFilePath(studioAudioBlob, fileName);
+                        }
+                        const txid = await tauri.invoke("wallet_send_file_path", {
                           accountId: null,
-                          fileB64,
+                          filePath: studioAudioFilePath,
                           toAddress,
                           amountKas,
                           rpcUrl,
@@ -2007,11 +2317,12 @@
                         if (studioVideoStatusEl) studioVideoStatusEl.textContent = "Sending…";
                         const ts = new Date().toISOString().replace(/[:.]/g, "-");
                         const fileName = `kat_video_${ts}.webm`;
-                        const fileB64 = await readBlobDataUrl(studioVideoBlob);
-                        const txid = await tauri.invoke("wallet_send_file_b64", {
-                          window: null,
+                        if (!studioVideoFilePath) {
+                          studioVideoFilePath = await ensureStudioTempFilePath(studioVideoBlob, fileName);
+                        }
+                        const txid = await tauri.invoke("wallet_send_file_path", {
                           accountId: null,
-                          fileB64,
+                          filePath: studioVideoFilePath,
                           toAddress,
                           amountKas,
                           rpcUrl,
@@ -2198,12 +2509,113 @@
             showModal({
               title: "Mnemonic created",
               body: `Save this mnemonic securely. Anyone with it can control your funds.\n\n${String(phrase)}`,
-              actions: [{ label: "I saved it", primary: true }],
+              actions: [
+                {
+                  label: "Copy mnemonic",
+                  keepOpen: true,
+                  onClick: async () => {
+                    await copyText(String(phrase));
+                    flashPill("Copied");
+                  },
+                },
+                { label: "I saved it", primary: true },
+              ],
             });
           } catch (e) {
             setError(String(e));
           }
         });
+
+        if (walletImportMnemonicBtnEl) {
+          walletImportMnemonicBtnEl.addEventListener("click", async () => {
+            setError("");
+            try {
+              const username = String(walletImportUsernameEl?.value || "").trim();
+              const password = String(walletImportPasswordEl?.value || "");
+              const phrase = String(walletImportMnemonicEl?.value || "").trim();
+              const mnemonicPasswordRaw = String(walletMnemonicPassEl?.value || "");
+              const mnemonicPassword = mnemonicPasswordRaw.trim() ? mnemonicPasswordRaw : null;
+
+              if (!username) {
+                setError("Enter a username.");
+                return;
+              }
+              if (!password) {
+                setError("Enter a password.");
+                return;
+              }
+              if (!phrase) {
+                setError("Enter your mnemonic phrase.");
+                return;
+              }
+
+              await tauri.invoke("wallet_profile_import_mnemonic", {
+                username,
+                password,
+                phrase,
+                mnemonicPassword,
+              });
+
+              await refreshProfiles();
+              showModal({
+                title: "Imported",
+                body: `Mnemonic imported for profile "${username}".`,
+                actions: [{ label: "OK", primary: true }],
+              });
+            } catch (e) {
+              setError(String(e));
+              showModal({
+                title: "Import failed",
+                body: String(e || "Unable to import mnemonic."),
+                actions: [{ label: "OK", primary: true }],
+              });
+            }
+          });
+        }
+
+        if (walletImportPrivKeyBtnEl) {
+          walletImportPrivKeyBtnEl.addEventListener("click", async () => {
+            setError("");
+            try {
+              const username = String(walletImportUsernameEl?.value || "").trim();
+              const password = String(walletImportPasswordEl?.value || "");
+              const privateKeyHex = String(walletImportPrivKeyEl?.value || "").trim();
+
+              if (!username) {
+                setError("Enter a username.");
+                return;
+              }
+              if (!password) {
+                setError("Enter a password.");
+                return;
+              }
+              if (!privateKeyHex) {
+                setError("Enter a private key (hex).");
+                return;
+              }
+
+              await tauri.invoke("wallet_profile_import_private_key", {
+                username,
+                password,
+                privateKeyHex,
+              });
+
+              await refreshProfiles();
+              showModal({
+                title: "Imported",
+                body: `Private key imported for profile "${username}".`,
+                actions: [{ label: "OK", primary: true }],
+              });
+            } catch (e) {
+              setError(String(e));
+              showModal({
+                title: "Import failed",
+                body: String(e || "Unable to import private key."),
+                actions: [{ label: "OK", primary: true }],
+              });
+            }
+          });
+        }
 
         if (walletDeleteProfileBtnEl) {
           walletDeleteProfileBtnEl.addEventListener("click", async () => {
@@ -2465,6 +2877,7 @@
 
         function setPickedFile(file) {
           selectedSendFile = file || null;
+          selectedSendFilePath = "";
 
           if (!sendFileHintEl) return;
           if (selectedSendFile && selectedSendFile.name) {
@@ -2474,8 +2887,57 @@
           }
         }
 
+        function setPickedFilePath(path) {
+          selectedSendFilePath = String(path || "").trim();
+          selectedSendFile = null;
+          try {
+            if (sendFileEl) sendFileEl.value = "";
+          } catch (_) {}
+
+          if (!sendFileHintEl) return;
+          if (selectedSendFilePath) {
+            const base = selectedSendFilePath.split(/[/\\]/).pop() || selectedSendFilePath;
+            sendFileHintEl.textContent = `Selected: ${base}`;
+          } else {
+            sendFileHintEl.textContent = "Tip: drag & drop a file here.";
+          }
+        }
+
         function setDroppedFile(file) {
           setPickedFile(file);
+        }
+
+        if (sendDropZoneEl && dialogApi?.open) {
+          try {
+            if (sendFileEl) {
+              sendFileEl.style.pointerEvents = "none";
+            }
+          } catch (_) {}
+
+          sendDropZoneEl.style.cursor = "pointer";
+
+          const pickPath = async () => {
+            const picked = await dialogApi.open({ directory: false, multiple: false });
+            if (!picked) return;
+            setPickedFilePath(String(picked));
+          };
+
+          sendDropZoneEl.addEventListener("click", (e) => {
+            try {
+              e.preventDefault();
+              e.stopPropagation();
+            } catch (_) {}
+            pickPath();
+          });
+          sendDropZoneEl.addEventListener("keydown", (e) => {
+            const k = e && (e.key || e.code);
+            if (k !== "Enter" && k !== " ") return;
+            try {
+              e.preventDefault();
+              e.stopPropagation();
+            } catch (_) {}
+            pickPath();
+          });
         }
 
         function clearSession() {
@@ -2500,7 +2962,7 @@
 
           try {
             if (sendToEl) sendToEl.value = "";
-            if (sendAmountEl) sendAmountEl.value = "0";
+            if (sendAmountEl) sendAmountEl.value = "0.15";
             clearKnsPreview(sendToResolvedEl);
           } catch (_) {}
 
@@ -2528,12 +2990,12 @@
 
           try {
             if (studioAudioToEl) studioAudioToEl.value = "";
-            if (studioAudioAmountEl) studioAudioAmountEl.value = "0";
+            if (studioAudioAmountEl) studioAudioAmountEl.value = "0.15";
             clearKnsPreview(studioAudioToResolvedEl);
           } catch (_) {}
           try {
             if (studioVideoToEl) studioVideoToEl.value = "";
-            if (studioVideoAmountEl) studioVideoAmountEl.value = "0";
+            if (studioVideoAmountEl) studioVideoAmountEl.value = "0.15";
             clearKnsPreview(studioVideoToResolvedEl);
           } catch (_) {}
         }
@@ -2545,7 +3007,7 @@
           setRing(sendRingEl, 0);
 
           const f = selectedSendFile || (sendFileEl.files && sendFileEl.files[0]);
-          if (!f) {
+          if (!f && !selectedSendFilePath) {
             sendProgressEl.textContent = "Idle";
             setError("Select a file to send.");
             return;
@@ -2582,21 +3044,55 @@
 
           let overlayWasShown = false;
           try {
+            let txid = "";
+
+            const maxInlineB64Bytes = 8 * 1024 * 1024;
+            let filePath = selectedSendFilePath;
+            const fileName = (f && f.name) ? f.name : (filePath.split(/[/\\]/).pop() || "upload.bin");
+
+            if (!filePath && f && typeof f.path === "string" && f.path.trim()) {
+              filePath = f.path.trim();
+            }
+
+            if (!filePath && dialogApi?.open && f && f.size > maxInlineB64Bytes) {
+              const picked = await dialogApi.open({ directory: false, multiple: false });
+              if (!picked) throw new Error("File selection cancelled");
+              filePath = String(picked);
+              setPickedFilePath(filePath);
+            }
+
             showActionOverlay({ title: "Publishing…", sub: "Building and submitting chunks to the DAG", theme: "project" });
             overlayWasShown = true;
-            const fileB64 = await readFileB64(f);
-            const txid = await tauri.invoke("wallet_send_file_b64", {
-              window: null,
-              accountId: null,
-              fileB64,
-              toAddress,
-              amountKas,
-              rpcUrl,
-              resumeFrom: null,
-              resumeOutputIndex: 1,
-              fileName: f.name,
-              fromPrivateKey,
-            });
+
+            if (filePath) {
+              txid = await tauri.invoke("wallet_send_file_path", {
+                accountId: null,
+                filePath,
+                toAddress,
+                amountKas,
+                rpcUrl,
+                resumeFrom: null,
+                resumeOutputIndex: 1,
+                fileName,
+                fromPrivateKey,
+              });
+            } else {
+              const fileB64 = await readFileB64(f);
+              if (!fileB64) {
+                throw new Error("Unable to read file into memory (fileB64 is empty). For large files, use the native file picker.");
+              }
+              txid = await tauri.invoke("wallet_send_file_b64", {
+                accountId: null,
+                fileB64,
+                toAddress,
+                amountKas,
+                rpcUrl,
+                resumeFrom: null,
+                resumeOutputIndex: 1,
+                fileName,
+                fromPrivateKey,
+              });
+            }
             sendTxidEl.textContent = String(txid);
             recvTxEl.value = String(txid);
             sendProgressEl.textContent = "Done";
@@ -2608,8 +3104,7 @@
             }
             showModal({
               title: "Send complete",
-              body: `Transaction ID:\n${txid}\n\nNext: open the explorer transaction and copy the first value under \"Block hashes\" to use as a scan anchor for receive.`
-              ,
+              body: `Transaction ID:\n${txid}\n\nNext: open the explorer transaction and copy the first value under \"Block hashes\" to use as a scan anchor for receive.`,
               actions: [
                 {
                   label: "Open in Explorer",
@@ -2693,9 +3188,11 @@
             return;
           }
 
+          let overlayWasShown = false;
           try {
+            showActionOverlay({ title: "Receiving…", sub: "Scanning and downloading chunks from the DAG", theme: "project" });
+            overlayWasShown = true;
             const outPath = await tauri.invoke("wallet_receive_file", {
-              window: null,
               txId,
               outputPath,
               rpcUrl,
@@ -2704,6 +3201,11 @@
             lastReceivedPath = String(outPath);
             recvStatusEl.textContent = "Done";
             setRing(recvRingEl, 1);
+
+            if (overlayWasShown) {
+              hideActionOverlay();
+              overlayWasShown = false;
+            }
 
             showModal({
               title: "Receive complete",
@@ -2731,6 +3233,13 @@
               body: String(e),
               actions: [{ label: "Close", primary: true }],
             });
+            if (overlayWasShown) {
+              hideActionOverlay();
+              overlayWasShown = false;
+            }
+          }
+          finally {
+            if (overlayWasShown) hideActionOverlay();
           }
         });
 

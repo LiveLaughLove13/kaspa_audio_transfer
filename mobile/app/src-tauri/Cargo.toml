@@ -1,0 +1,53 @@
+[package]
+name = "mobileapp"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "mobileapp_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+tokio = { version = "1.33.0", features = ["rt-multi-thread", "macros", "time", "sync"] }
+kaspa_audio_transfer = { path = "../../..", default-features = false }
+
+borsh = { version = "1.5", features = ["derive"] }
+zeroize = { version = "1.6", features = ["derive"] }
+once_cell = "1.21"
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
+urlencoding = "2.1"
+qrcode = { version = "0.11", default-features = false, features = ["svg"] }
+
+kaspa-wallet-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+kaspa-wallet-keys = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+kaspa-bip32 = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+kaspa-addresses = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+kaspa-consensus-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+kaspa-txscript = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+kaspa-utils = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+
+secp256k1 = { version = "0.29.0", features = ["global-context", "rand-std", "serde"] }
+
+[patch.crates-io]
+intertrait = { path = "../../../vendor/intertrait" }
+intertrait-macros = { path = "../../../vendor/intertrait-macros" }
+

@@ -1,15 +1,51 @@
-# Rust Web Backend Design for Kaspa File Transfer Suite
+# Kaspa Data Transfer Suite (Kaspathon2026) - Current Architecture
 
-This document specifies the design of a Rust-based backend service that powers the drag-and-drop web interface for the `kaspa_audio_transfer` tool.
+This repository implements a file transfer suite built around a Rust CLI and two Tauri apps.
 
-The backend will:
+This document is intended to describe the current, implemented architecture and how the components fit together.
 
-- Accept file uploads from the browser.
-- Call the existing `kaspa_audio_transfer` CLI for `estimate`, `send`, and optionally `receive`.
-- Track job status (pending payment → paid → sending → completed/failed).
-- Keep all private keys and node access **off** the frontend.
+## What ships in this repo
 
-> **Scope:** This is a design document only. It describes how the backend should be structured and behave, so it can be implemented later.
+- **Core Rust crate + CLI binary**
+  - Workspace root: `Cargo.toml`
+  - CLI binary name: `kaspa_data_transfer`
+  - Source: `src/`
+- **Desktop GUI (Tauri v2)**
+  - Tauri project: `desktop/src-tauri`
+  - Static UI assets: `desktop/ui` (loaded via Tauri `frontendDist`)
+- **Android app (Tauri Mobile / Tauri v2)**
+  - Tauri project: `mobile/app/src-tauri`
+  - Static UI assets: `mobile/ui` (loaded via Tauri `frontendDist`)
+
+## High-level data flow
+
+- **CLI**
+  - Directly performs `estimate`, `send`, and `receive` operations against a Kaspa node RPC endpoint.
+- **Desktop GUI**
+  - The UI runs in a Tauri window.
+  - The Rust backend inside the desktop app executes the same operations.
+  - For sending/receiving files, the desktop app uses the `kaspa_data_transfer` helper binary:
+    - In packaged builds, the helper is bundled as an app resource.
+    - In debug/dev builds, the desktop app can also use a repo-built helper from `target/debug` or `target/release`, or a path set via `KASPA_DATA_TRANSFER_BIN`.
+- **Android app**
+  - The UI runs in a Tauri WebView.
+  - The Rust backend is compiled into the Android app (via the `mobile/app/src-tauri` crate) and depends on the root crate.
+
+## Build-from-source entry points (sanity)
+
+- **CLI:** `cargo build --release --bin kaspa_data_transfer`
+- **Desktop (from `desktop/src-tauri`):** `cargo tauri build --no-bundle`
+- **Android Rust-side compile:** `cargo check --manifest-path mobile/app/src-tauri/Cargo.toml`
+
+---
+
+## Appendix: Deprecated web backend design (not implemented)
+
+The remainder of this file contains an older design proposal for a standalone Rust HTTP backend (previously described as living under `web/backend`).
+
+This repository currently does not contain a `web/` folder or a standalone `axum` backend implementation.
+
+Keep this section only as a reference for future work.
 
 ---
 
@@ -20,7 +56,7 @@ The backend will:
 - **Async runtime:** `tokio`
 - **JSON (de)serialization:** `serde`, `serde_json`
 - **Configuration:** environment variables (optionally `.env` + `dotenvy`)
-- **Process management:** `tokio::process::Command` to shell out to `kaspa_audio_transfer`
+- **Process management:** `tokio::process::Command` to shell out to `kaspa_data_transfer`
 
 The backend will be a single Rust binary that listens on an HTTP port and exposes a small set of REST-like endpoints under `/api`.
 
@@ -38,7 +74,7 @@ web/
       main.rs       # App bootstrap, router setup, background tasks
       config.rs     # Load environment variables and constants
       jobs.rs       # Job types, job store, status transitions
-      process.rs    # Helpers for calling kaspa_audio_transfer
+      process.rs    # Helpers for calling kaspa_data_transfer
       routes.rs     # HTTP handlers for /api endpoints
 ```
 
@@ -87,7 +123,7 @@ web/
     - `update_job_status(id, new_status)`
 
 - **`process.rs`**
-  - Functions to shell out to `kaspa_audio_transfer`:
+  - Functions to shell out to `kaspa_data_transfer`:
     - `run_estimate(file_path: &Path, storage_amount_kas: f64) -> EstimateResult`
     - `run_send(file_path: &Path, storage_amount_kas: f64, to_address: &str) -> SendResult`
     - Optional: `run_receive(txid: &str) -> ReceiveResult` for download.
@@ -142,7 +178,7 @@ All endpoints live under `/api` and speak JSON (except for file uploads and opti
 3. Call `run_estimate`:
    - Shells out to:
      ```text
-     kaspa_audio_transfer estimate <file_path> \
+     kaspa_data_transfer estimate <file_path> \
        --from-private-key $SERVICE_PRIVATE_KEY \
        --amount <storage_amount>
      ```
@@ -212,7 +248,7 @@ All endpoints live under `/api` and speak JSON (except for file uploads and opti
 2. Call `run_send` for that job:
    - Shells out to:
      ```text
-     kaspa_audio_transfer send <file_path> \
+     kaspa_data_transfer send <file_path> \
        --from-private-key $SERVICE_PRIVATE_KEY \
        --to-address <target_address> \
        --amount <storage_amount>
@@ -251,7 +287,7 @@ All endpoints live under `/api` and speak JSON (except for file uploads and opti
 
 **Behavior:**
 
-- Backend runs `kaspa_audio_transfer receive <TXID> --output -` and streams response.
+- Backend runs `kaspa_data_transfer receive <TXID> --output -` and streams response.
 - Sets appropriate `Content-Type` and `Content-Disposition` headers.
 
 This endpoint is optional; you may choose to provide only CLI instructions for retrieval to minimize backend bandwidth and complexity.
@@ -287,7 +323,7 @@ The frontend (drag-and-drop web UI) will:
 4. Optionally call `POST /api/send/{id}` or rely on automatic sending once payment is detected.
 5. Show the final TXID and block hash to the user and provide CLI instructions:
    ```bash
-   kaspa_audio_transfer receive <TXID> --output downloaded_file
+   kaspa_data_transfer receive <TXID> --output downloaded_file
    ```
 
 This backend design keeps most complexity in a well-structured Rust service, while the frontend can remain relatively thin and focused on user experience.

@@ -19,3 +19,11 @@ Thumbs.db
 **/node_modules/
 **/dist/
 **/.vite/
+
+**/src-tauri/gen/
+**/src-tauri/icons/_gen/
+**/src-tauri/icons/_gen_desktop/
+
+**/local.properties
+**/.cxx/
+**/*.iml

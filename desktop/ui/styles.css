@@ -179,12 +179,15 @@
         inset: 0;
         width: 100%;
         height: 100%;
+        z-index: 0;
+        opacity: 0.58;
       }
 
       .actionNodes {
         position: absolute;
         inset: 0;
         pointer-events: none;
+        z-index: 1;
       }
 
       .actionNode {
@@ -208,6 +211,7 @@
         position: absolute;
         top: 18px;
         right: 18px;
+        z-index: 3;
         width: 38px;
         height: 38px;
         border-radius: 999px;
@@ -227,6 +231,7 @@
       .actionCenter {
         position: absolute;
         inset: 0;
+        z-index: 2;
         display: grid;
         place-items: center;
         pointer-events: none;
@@ -237,11 +242,12 @@
         flex-direction: column;
         align-items: center;
         gap: 10px;
-        padding: 0;
-        border-radius: 0;
-        border: 0;
-        background: transparent;
-        box-shadow: none;
+        padding: 18px 26px 16px;
+        border-radius: 22px;
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        background: rgba(14, 16, 18, 0.55);
+        backdrop-filter: blur(18px);
+        box-shadow: 0 16px 50px rgba(0, 0, 0, 0.55);
       }
 
       .actionLogo {
@@ -947,14 +953,13 @@
           .walletFsOverlay {
             position: fixed;
             inset: 0;
-            z-index: 9999;
+            z-index: 9997;
             display: none;
             align-items: center;
             justify-content: center;
-            padding: 18px;
             background:
-              radial-gradient(1200px 720px at 50% 45%, rgba(0, 0, 0, 0.00) 0%, rgba(0, 0, 0, 0.62) 76%, rgba(0, 0, 0, 0.84) 100%),
-              linear-gradient(180deg, rgba(10, 12, 14, 0.65) 0%, rgba(10, 12, 14, 0.82) 100%);
+              radial-gradient(1000px 700px at 50% 45%, rgba(0, 0, 0, 0.00) 0%, rgba(0, 0, 0, 0.64) 75%, rgba(0, 0, 0, 0.86) 100%),
+              linear-gradient(180deg, rgba(0, 0, 0, 0.12) 0%, rgba(0, 0, 0, 0.36) 55%, rgba(0, 0, 0, 0.66) 100%);
             backdrop-filter: blur(10px);
           }
 
@@ -1654,13 +1659,13 @@
             position: fixed;
             inset: 0;
             background:
-              radial-gradient(1200px 720px at 50% 40%, rgba(0, 0, 0, 0.00) 0%, rgba(0, 0, 0, 0.62) 72%, rgba(0, 0, 0, 0.82) 100%),
-              rgba(0, 0, 0, 0.70);
+              radial-gradient(1000px 700px at 50% 45%, rgba(0, 0, 0, 0.00) 0%, rgba(0, 0, 0, 0.64) 75%, rgba(0, 0, 0, 0.86) 100%),
+              linear-gradient(180deg, rgba(0, 0, 0, 0.12) 0%, rgba(0, 0, 0, 0.36) 55%, rgba(0, 0, 0, 0.66) 100%);
             display: none;
             align-items: center;
             justify-content: center;
             padding: 18px;
-            z-index: 9999;
+            z-index: 10000;
             backdrop-filter: blur(10px);
           }
 

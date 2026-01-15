@@ -1,38 +1,18 @@
 {
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Kaspa Data Transfer",
+  "version": "0.1.0",
+  "identifier": "com.kaspa.data.transfer",
   "build": {
     "beforeBuildCommand": "cargo build --release --manifest-path ../Cargo.toml -p kaspa_audio_transfer",
     "beforeDevCommand": "cargo build --manifest-path ../Cargo.toml -p kaspa_audio_transfer",
-    "devPath": "../ui",
-    "distDir": "../ui",
-    "withGlobalTauri": true
+    "frontendDist": "../ui"
   },
-  "package": {
-    "productName": "Kaspa Audio Transfer",
-    "version": "0.1.0"
-  },
-  "tauri": {
-    "allowlist": {
-      "all": false,
-      "dialog": {
-        "all": true
-      },
-      "fs": {
-        "all": true
-      },
-      "path": {
-        "all": true
-      },
-      "shell": {
-        "open": true
-      },
-      "clipboard": {
-        "readText": true,
-        "writeText": true
-      }
-    },
+  "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Kaspa Audio Transfer",
+        "title": "Kaspa Data Transfer",
         "width": 1200,
         "height": 800,
         "minWidth": 1200,
@@ -42,15 +22,13 @@
       }
     ],
     "security": {
-      "csp": null,
-      "dangerousRemoteDomainIpcAccess": []
-    },
-    "bundle": {
-      "active": true,
-      "targets": ["msi"],
-      "identifier": "com.kaspa.audio.transfer",
-      "resources": ["../../target/release/kaspa_audio_transfer.exe"],
-      "icon": ["icons/icon_new.ico"]
+      "csp": null
     }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi"],
+    "resources": ["../../target/release/kaspa_data_transfer.exe"],
+    "icon": ["icons/icon_new.ico"]
   }
 }

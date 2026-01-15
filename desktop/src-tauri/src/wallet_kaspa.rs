@@ -1,7 +1,8 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use kaspa_addresses::{Address, Prefix, Version};
+use once_cell::sync::Lazy;
 use kaspa_consensus_core::{
     config::params::Params,
     constants::{MAX_TX_IN_SEQUENCE_NUM, SOMPI_PER_KASPA, TX_VERSION, UNACCEPTED_DAA_SCORE},
@@ -25,12 +26,28 @@ use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
 use kaspa_txscript::pay_to_address_script;
 use serde::Serialize;
 use secp256k1::Keypair;
+use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
 
 use crate::wallet_vault;
 
 type DynRpc = Arc<dyn RpcApi + Send + Sync>;
 const RESOLVER_MAX_UTXO_INDEX_ATTEMPTS: u32 = 12;
+
+fn network_type_key(network: NetworkType) -> &'static str {
+    match network {
+        NetworkType::Mainnet => "mainnet",
+        NetworkType::Testnet => "testnet",
+        NetworkType::Devnet => "devnet",
+        _ => "other",
+    }
+}
+
+fn cache_key(rpc_url: &str, expected_network: NetworkType) -> String {
+    format!("{}::{}", network_type_key(expected_network), rpc_url)
+}
+
+static RPC_CLIENT_CACHE: Lazy<Mutex<HashMap<String, DynRpc>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -104,6 +121,15 @@ async fn connect_client(rpc_url: Option<&str>, expected_network: NetworkType) ->
         .filter(|s| !s.is_empty())
         .unwrap_or("grpc://127.0.0.1:16110");
 
+    let key = cache_key(rpc_url, expected_network);
+
+    {
+        let guard = RPC_CLIENT_CACHE.lock().await;
+        if let Some(cached) = guard.get(&key) {
+            return Ok(cached.clone());
+        }
+    }
+
     if let Some(network_id) = parse_public_resolver_spec(rpc_url, expected_network) {
         let mut last_err: Option<String> = None;
         for attempt in 1..=RESOLVER_MAX_UTXO_INDEX_ATTEMPTS {
@@ -129,10 +155,17 @@ async fn connect_client(rpc_url: Option<&str>, expected_network: NetworkType) ->
             let rpc = client.rpc_api();
             match rpc.get_info().await {
                 Ok(info) => {
-                    if info.is_utxo_indexed {
+                    if info.is_utxo_indexed && info.is_synced {
+                        {
+                            let mut guard = RPC_CLIENT_CACHE.lock().await;
+                            guard.insert(key.clone(), rpc.clone());
+                        }
                         return Ok(rpc);
                     }
-                    last_err = Some("connected node is not UTXO-indexed".to_string());
+                    last_err = Some(format!(
+                        "connected node not suitable (utxo_indexed={}, synced={})",
+                        info.is_utxo_indexed, info.is_synced
+                    ));
                 }
                 Err(e) => last_err = Some(e.to_string()),
             }
@@ -143,7 +176,7 @@ async fn connect_client(rpc_url: Option<&str>, expected_network: NetworkType) ->
         }
 
         return Err(format!(
-            "unable to find a public resolver node with UTXO index enabled after {} attempt(s). last error: {}",
+            "unable to find a public resolver node that is UTXO-indexed and synced after {} attempt(s). last error: {}",
             RESOLVER_MAX_UTXO_INDEX_ATTEMPTS,
             last_err.unwrap_or_else(|| "unknown".to_string())
         ));
@@ -161,7 +194,13 @@ async fn connect_client(rpc_url: Option<&str>, expected_network: NetworkType) ->
     )
     .await
     .map_err(|e| format!("failed to connect to kaspa grpc: {e}"))?;
-    Ok(Arc::new(client))
+
+    let out: DynRpc = Arc::new(client);
+    {
+        let mut guard = RPC_CLIENT_CACHE.lock().await;
+        guard.insert(key, out.clone());
+    }
+    Ok(out)
 }
 
 pub async fn rpc_connection_info(network: &str, rpc_url: Option<&str>) -> Result<RpcConnectionInfo, String> {

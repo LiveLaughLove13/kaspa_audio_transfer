@@ -14,7 +14,6 @@ use kaspa_consensus_core::network::NetworkType;
 use kaspa_bip32::{DerivationPath, ExtendedPrivateKey, Mnemonic, PrivateKey};
 use kaspa_utils::hex::FromHex;
 use secp256k1::Keypair;
-use tauri::api::path::data_dir;
 use zeroize::Zeroize;
 
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize, Zeroize)]
@@ -73,15 +72,19 @@ fn secret_from_password(password: &str) -> Secret {
     Secret::new(password.as_bytes().to_vec())
 }
 
-fn vault_dir() -> Result<PathBuf, String> {
-    let mut base = data_dir().ok_or_else(|| "unable to resolve OS data_dir".to_string())?;
-    base.push("KaspaAudioTransfer");
-    base.push("wallet");
-    Ok(base)
+fn vault_dir(app_data_dir: &Path) -> Result<PathBuf, String> {
+    let new_base = app_data_dir.join("KaspaDataTransfer").join("wallet");
+    let old_base = app_data_dir.join("KaspaAudioTransfer").join("wallet");
+
+    if new_base.exists() || !old_base.exists() {
+        Ok(new_base)
+    } else {
+        Ok(old_base)
+    }
 }
 
-fn vault_file_path() -> Result<PathBuf, String> {
-    let mut p = vault_dir()?;
+fn vault_file_path(app_data_dir: &Path) -> Result<PathBuf, String> {
+    let mut p = vault_dir(app_data_dir)?;
     p.push("vault.borsh");
     Ok(p)
 }
@@ -91,8 +94,8 @@ fn ensure_parent_dir(path: &Path) -> Result<(), String> {
     std::fs::create_dir_all(parent).map_err(|e| e.to_string())
 }
 
-fn load_vault() -> Result<WalletVaultFile, String> {
-    let path = vault_file_path()?;
+fn load_vault(app_data_dir: &Path) -> Result<WalletVaultFile, String> {
+    let path = vault_file_path(app_data_dir)?;
     let bytes = match std::fs::read(&path) {
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(WalletVaultFile::default()),
@@ -101,15 +104,15 @@ fn load_vault() -> Result<WalletVaultFile, String> {
     borsh::from_slice::<WalletVaultFile>(&bytes).map_err(|e| e.to_string())
 }
 
-fn save_vault(v: &WalletVaultFile) -> Result<(), String> {
-    let path = vault_file_path()?;
+fn save_vault(app_data_dir: &Path, v: &WalletVaultFile) -> Result<(), String> {
+    let path = vault_file_path(app_data_dir)?;
     ensure_parent_dir(&path)?;
     let bytes = borsh::to_vec(v).map_err(|e| e.to_string())?;
     std::fs::write(path, bytes).map_err(|e| e.to_string())
 }
 
-pub fn list_profiles() -> Result<Vec<WalletProfileInfo>, String> {
-    let v = load_vault()?;
+pub fn list_profiles(app_data_dir: &Path) -> Result<Vec<WalletProfileInfo>, String> {
+    let v = load_vault(app_data_dir)?;
     Ok(v
         .profiles
         .into_iter()
@@ -117,7 +120,7 @@ pub fn list_profiles() -> Result<Vec<WalletProfileInfo>, String> {
         .collect())
 }
 
-pub fn delete_profile(username: &str) -> Result<(), String> {
+pub fn delete_profile(app_data_dir: &Path, username: &str) -> Result<(), String> {
     let username = username.trim();
     if username.is_empty() {
         return Err("username is empty".to_string());
@@ -127,19 +130,19 @@ pub fn delete_profile(username: &str) -> Result<(), String> {
         lock_wallet();
     }
 
-    let mut vault = load_vault()?;
+    let mut vault = load_vault(app_data_dir)?;
     let before = vault.profiles.len();
     vault.profiles.retain(|p| p.username != username);
     if vault.profiles.len() == before {
         return Err("profile not found".to_string());
     }
 
-    save_vault(&vault)
+    save_vault(app_data_dir, &vault)
 }
 
-pub fn clear_all_profiles() -> Result<(), String> {
+pub fn clear_all_profiles(app_data_dir: &Path) -> Result<(), String> {
     lock_wallet();
-    let path = vault_file_path()?;
+    let path = vault_file_path(app_data_dir)?;
     match std::fs::remove_file(&path) {
         Ok(_) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -151,7 +154,7 @@ fn find_profile<'a>(vault: &'a WalletVaultFile, username: &str) -> Option<&'a Wa
     vault.profiles.iter().find(|p| p.username == username)
 }
 
-pub fn create_profile_mnemonic(username: &str, password: &str, word_count: u32) -> Result<String, String> {
+pub fn create_profile_mnemonic(app_data_dir: &Path, username: &str, password: &str, word_count: u32) -> Result<String, String> {
     let username = username.trim();
     if username.is_empty() {
         return Err("username is empty".to_string());
@@ -161,7 +164,7 @@ pub fn create_profile_mnemonic(username: &str, password: &str, word_count: u32) 
         return Err("password is empty".to_string());
     }
 
-    let mut vault = load_vault()?;
+    let mut vault = load_vault(app_data_dir)?;
     if find_profile(&vault, username).is_some() {
         return Err("profile already exists".to_string());
     }
@@ -192,11 +195,17 @@ pub fn create_profile_mnemonic(username: &str, password: &str, word_count: u32) 
         payload: enc,
     });
 
-    save_vault(&vault)?;
+    save_vault(app_data_dir, &vault)?;
     Ok(phrase)
 }
 
-pub fn import_profile_mnemonic(username: &str, password: &str, phrase: &str, mnemonic_password: Option<&str>) -> Result<(), String> {
+pub fn import_profile_mnemonic(
+    app_data_dir: &Path,
+    username: &str,
+    password: &str,
+    phrase: &str,
+    mnemonic_password: Option<&str>,
+) -> Result<(), String> {
     let username = username.trim();
     if username.is_empty() {
         return Err("username is empty".to_string());
@@ -212,7 +221,7 @@ pub fn import_profile_mnemonic(username: &str, password: &str, phrase: &str, mne
     // Validate.
     kaspa_bip32::Mnemonic::new(phrase, kaspa_bip32::Language::English).map_err(|e| e.to_string())?;
 
-    let mut vault = load_vault()?;
+    let mut vault = load_vault(app_data_dir)?;
     if find_profile(&vault, username).is_some() {
         return Err("profile already exists".to_string());
     }
@@ -231,10 +240,10 @@ pub fn import_profile_mnemonic(username: &str, password: &str, phrase: &str, mne
         payload: enc,
     });
 
-    save_vault(&vault)
+    save_vault(app_data_dir, &vault)
 }
 
-pub fn import_profile_private_key(username: &str, password: &str, private_key_hex: &str) -> Result<(), String> {
+pub fn import_profile_private_key(app_data_dir: &Path, username: &str, password: &str, private_key_hex: &str) -> Result<(), String> {
     let username = username.trim();
     if username.is_empty() {
         return Err("username is empty".to_string());
@@ -249,7 +258,7 @@ pub fn import_profile_private_key(username: &str, password: &str, private_key_he
         return Err("private key must be 32 bytes (64 hex chars)".to_string());
     }
 
-    let mut vault = load_vault()?;
+    let mut vault = load_vault(app_data_dir)?;
     if find_profile(&vault, username).is_some() {
         return Err("profile already exists".to_string());
     }
@@ -267,10 +276,10 @@ pub fn import_profile_private_key(username: &str, password: &str, private_key_he
         payload: enc,
     });
 
-    save_vault(&vault)
+    save_vault(app_data_dir, &vault)
 }
 
-pub fn unlock_profile(username: &str, password: &str) -> Result<(), String> {
+pub fn unlock_profile(app_data_dir: &Path, username: &str, password: &str) -> Result<(), String> {
     let username = username.trim();
     if username.is_empty() {
         return Err("username is empty".to_string());
@@ -279,7 +288,7 @@ pub fn unlock_profile(username: &str, password: &str) -> Result<(), String> {
         return Err("password is empty".to_string());
     }
 
-    let vault = load_vault()?;
+    let vault = load_vault(app_data_dir)?;
     let p = find_profile(&vault, username).ok_or_else(|| "profile not found".to_string())?;
 
     let decrypted = p

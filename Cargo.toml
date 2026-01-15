@@ -6,6 +6,14 @@ version = "0.1.0"
 edition = "2021"
 description = "A tool to send and receive files over the Kaspa network"
 
+[[bin]]
+name = "kaspa_data_transfer"
+path = "src/main.rs"
+
+[features]
+default = ["grpc"]
+grpc = ["dep:kaspa-grpc-client"]
+
 [dependencies]
 # Audio processing
 rodio = "0.17"
@@ -14,12 +22,11 @@ rodio = "0.17"
 clap = { version = "4.4", features = ["derive"] }
 
 # Kaspa dependencies
-kaspa-consensus-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
-kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
-kaspa-addresses = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
-kaspa-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
-kaspa-grpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
-kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
+kaspa-consensus-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+kaspa-addresses = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+kaspa-grpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2", optional = true }
+kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
 
 # Async runtime
 tokio = { version = "1.33.0", features = ["full"] }
@@ -41,17 +48,18 @@ rand = "0.8"
 futures = "0.3"
 
 # Transaction building/signing
-kaspa-txscript = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
+kaspa-txscript = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
 secp256k1 = { version = "0.29.0", features = ["global-context", "rand-std", "serde"] }
 
 [patch.crates-io]
-kaspa-consensus-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
-kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
-kaspa-addresses = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
-kaspa-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
-kaspa-grpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
-kaspa-txscript = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
-kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
+kaspa-consensus-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+kaspa-addresses = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+kaspa-grpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+kaspa-txscript = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+intertrait = { path = "vendor/intertrait" }
+intertrait-macros = { path = "vendor/intertrait-macros" }
 
 [dev-dependencies]
 tempfile = "3.10"

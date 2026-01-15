@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Kaspa Data Transfer",
+  "version": "0.1.0",
+  "identifier": "com.kaspa.data.transfer",
+  "build": {
+    "beforeBuildCommand": {
+      "cwd": ".",
+      "script": "cargo run --bin ensure_android_gradle_props"
+    },
+    "frontendDist": "../../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Kaspa Data Transfer",
+        "width": 800,
+        "height": 600
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

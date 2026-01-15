@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="data:," />
-    <title>Kaspa Audio Transfer</title>
+    <title>Kaspa Data Transfer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
@@ -20,7 +20,7 @@
             <path d="M11 1.6L19.2 6.4V15.6L11 20.4L2.8 15.6V6.4L11 1.6Z" stroke="var(--kaspa-primary)" stroke-width="1.8" stroke-linejoin="round" />
             <path d="M4.9 11H7.2L8.4 8.1L10.1 14.2L11.5 10.3L12.6 12.7H14.9" stroke="var(--kaspa-accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
-          <div class="splashTitle">Kaspa Audio Transfer</div>
+          <div class="splashTitle">Kaspa Data Transfer</div>
           <div class="splashSub">Loading…</div>
         </div>
       </div>
@@ -38,12 +38,13 @@
           <path d="M11 1.6L19.2 6.4V15.6L11 20.4L2.8 15.6V6.4L11 1.6Z" stroke="url(#katLogoG)" stroke-width="1.8" stroke-linejoin="round" />
           <path d="M4.9 11H7.2L8.4 8.1L10.1 14.2L11.5 10.3L12.6 12.7H14.9" stroke="url(#katLogoG)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <span class="logo-text">Kaspa Audio Transfer</span>
+        <span class="logo-text">Kaspa Data Transfer</span>
       </div>
 
       <nav class="nav-links" aria-label="Primary">
         <button id="navTransfer" class="navBtn navBtnActive" type="button">Transfer</button>
         <button id="navWallet" class="navBtn" type="button">Wallet</button>
+        <button id="navManage" class="navBtn" type="button">Manage</button>
         <button id="navImport" class="navBtn" type="button">Import</button>
         <button id="navStudio" class="navBtn" type="button">Studio</button>
       </nav>
@@ -202,7 +203,7 @@
                 </div>
                 <div id="walletSendToResolved" class="knsPreview" style="display:none;"></div>
                 <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
-                  <input id="walletSendAmount" type="number" step="0.00000001" value="0" style="width:160px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                  <input id="walletSendAmount" type="number" step="0.00000001" value="0.15" style="width:160px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
                   <button id="walletSendKasBtn" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:linear-gradient(135deg,var(--kaspa-accent) 0%,var(--kaspa-primary) 100%);color:#03181a;font-weight:900;">Send</button>
                 </div>
                 <div style="margin-top:10px;font-size:12px;color:var(--text-muted);word-break:break-all;">
@@ -463,7 +464,7 @@
                     </div>
                     <div id="studioAudioToResolved" class="knsPreview" style="display:none;"></div>
                     <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
-                      <input id="studioAudioAmount" type="number" step="0.00000001" value="0" style="width:160px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                      <input id="studioAudioAmount" type="number" step="0.00000001" value="0.15" style="width:160px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
                       <div class="rpcMode" style="display:flex;gap:6px;align-items:center;">
                         <button id="studioAudioRpcModeLocal" class="tabBtn tabBtnActive" type="button" style="padding:8px 10px;border-radius:999px;">Local</button>
                         <button id="studioAudioRpcModePublic" class="tabBtn" type="button" style="padding:8px 10px;border-radius:999px;">Public</button>
@@ -528,7 +529,7 @@
                     </div>
                     <div id="studioVideoToResolved" class="knsPreview" style="display:none;"></div>
                     <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
-                      <input id="studioVideoAmount" type="number" step="0.00000001" value="0" style="width:160px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                      <input id="studioVideoAmount" type="number" step="0.00000001" value="0.15" style="width:160px;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
                       <div class="rpcMode" style="display:flex;gap:6px;align-items:center;">
                         <button id="studioVideoRpcModeLocal" class="tabBtn tabBtnActive" type="button" style="padding:8px 10px;border-radius:999px;">Local</button>
                         <button id="studioVideoRpcModePublic" class="tabBtn" type="button" style="padding:8px 10px;border-radius:999px;">Public</button>
@@ -589,7 +590,7 @@
                 <div style="display:flex;gap:10px;margin-top:10px;">
                   <div style="flex:1;">
                     <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Amount (KAS)</label>
-                    <input id="sendAmount" type="number" step="0.00000001" value="0" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
+                    <input id="sendAmount" type="number" step="0.00000001" value="0.15" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,21,30,0.55);color:var(--text);" />
                   </div>
                   <div style="flex:1;">
                     <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">RPC URL</label>
@@ -910,6 +911,16 @@
         const title = document.getElementById("walletFsTitle");
         const closeBtn = document.getElementById("walletFsClose");
 
+        const navManage = document.getElementById("navManage");
+
+        let prevActiveNavId = null;
+
+        function isAppModalOpen() {
+          const mo = document.getElementById("modalOverlay");
+          if (!mo) return false;
+          return mo.style.display && mo.style.display !== "none";
+        }
+
         const stash = document.getElementById("walletOverviewStash");
         const sendSection = document.getElementById("walletSendSection");
         const receiveSection = document.getElementById("walletReceiveSection");
@@ -1037,6 +1048,14 @@
             title.textContent = "Account";
             accountSection.style.display = "";
             body.appendChild(accountSection);
+          } else if (kind === "manage") {
+            title.textContent = "Manage wallet";
+            manageCreateSection.style.display = "";
+            manageImportSection.style.display = "";
+            manageDataSection.style.display = "";
+            body.appendChild(manageCreateSection);
+            body.appendChild(manageImportSection);
+            body.appendChild(manageDataSection);
           } else if (kind === "create") {
             title.textContent = "Create profile";
             manageCreateSection.style.display = "";
@@ -1067,9 +1086,45 @@
         }
 
         function closeWalletFs() {
+          if (isAppModalOpen()) return;
           overlay.classList.remove("walletFsOverlayOpen");
           overlay.setAttribute("aria-hidden", "true");
+          if (navManage) navManage.classList.remove("navBtnActive");
+          try {
+            if (prevActiveNavId) {
+              document.getElementById(prevActiveNavId)?.classList?.add("navBtnActive");
+            }
+          } catch (_) {}
+          prevActiveNavId = null;
           stashAll();
+        }
+
+        if (navManage) {
+          navManage.addEventListener(
+            "click",
+            (e) => {
+              try {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                e.stopPropagation();
+              } catch (_) {}
+              try {
+                const active = document.querySelector(".nav-links .navBtn.navBtnActive");
+                const activeId = String(active?.id || "").trim();
+                prevActiveNavId = activeId && activeId !== "navManage" ? activeId : null;
+              } catch (_) {
+                prevActiveNavId = null;
+              }
+
+              try {
+                document.querySelectorAll(".nav-links .navBtn").forEach((b) => b.classList.remove("navBtnActive"));
+              } catch (_) {}
+
+              navManage.classList.add("navBtnActive");
+              openWalletFs("manage");
+            },
+            true
+          );
         }
 
         document.addEventListener(

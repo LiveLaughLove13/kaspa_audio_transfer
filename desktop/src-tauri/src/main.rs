@@ -19,8 +19,11 @@ use qrcode::render::svg;
 use qrcode::QrCode;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use tauri::Emitter;
+use tauri::Manager;
+use tauri::AppHandle;
 use tauri::Window;
-use tauri::api::path::data_dir;
+use tauri::path::BaseDirectory;
 
 const DEFAULT_WALLET_DERIVATION_PATH: &str = "m/44'/111111'/0'/0/0";
 
@@ -70,19 +73,29 @@ struct AppSettings {
     node_bundle_dir: Option<String>,
 }
 
-fn app_data_root_dir() -> Result<PathBuf, String> {
-    let mut base = data_dir().ok_or_else(|| "unable to resolve OS data_dir".to_string())?;
-    base.push("KaspaAudioTransfer");
-    std::fs::create_dir_all(&base).map_err(|e| e.to_string())?;
-    Ok(base)
+fn app_data_root_dir_v2(app: &AppHandle) -> Result<PathBuf, String> {
+    let base = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("unable to resolve app_data_dir: {e}"))?;
+    let new_dir = base.join("KaspaDataTransfer");
+    let old_dir = base.join("KaspaAudioTransfer");
+
+    let chosen = if new_dir.exists() || !old_dir.exists() {
+        new_dir
+    } else {
+        old_dir
+    };
+    std::fs::create_dir_all(&chosen).map_err(|e| e.to_string())?;
+    Ok(chosen)
 }
 
-fn settings_file_path() -> Result<PathBuf, String> {
-    Ok(app_data_root_dir()?.join("settings.json"))
+fn settings_file_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app_data_root_dir_v2(app)?.join("settings.json"))
 }
 
-fn load_settings() -> Result<AppSettings, String> {
-    let p = settings_file_path()?;
+fn load_settings(app: &AppHandle) -> Result<AppSettings, String> {
+    let p = settings_file_path(app)?;
     match std::fs::read_to_string(&p) {
         Ok(s) => serde_json::from_str(&s).map_err(|e| format!("failed to parse settings.json: {e}")),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(AppSettings::default()),
@@ -90,8 +103,8 @@ fn load_settings() -> Result<AppSettings, String> {
     }
 }
 
-fn save_settings(settings: &AppSettings) -> Result<(), String> {
-    let p = settings_file_path()?;
+fn save_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), String> {
+    let p = settings_file_path(app)?;
     let s = serde_json::to_string_pretty(settings).map_err(|e| format!("failed to serialize settings.json: {e}"))?;
     std::fs::write(&p, s).map_err(|e| format!("failed to write settings.json: {e}"))
 }
@@ -131,14 +144,14 @@ fn validate_node_bundle_dir(dir: &Path) -> Result<(), String> {
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn node_bundle_get_dir() -> Result<Option<String>, String> {
-    let settings = load_settings()?;
+fn node_bundle_get_dir(app: AppHandle) -> Result<Option<String>, String> {
+    let settings = load_settings(&app)?;
     Ok(settings.node_bundle_dir)
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn node_bundle_set_dir(dir: Option<String>) -> Result<(), String> {
-    let mut settings = load_settings()?;
+fn node_bundle_set_dir(app: AppHandle, dir: Option<String>) -> Result<(), String> {
+    let mut settings = load_settings(&app)?;
 
     match dir.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         Some(d) => {
@@ -151,7 +164,7 @@ fn node_bundle_set_dir(dir: Option<String>) -> Result<(), String> {
         }
     }
 
-    save_settings(&settings)
+    save_settings(&app, &settings)
 }
 
 #[derive(Debug, Deserialize)]
@@ -234,23 +247,28 @@ async fn kns_domain_owner(domain: String, network: Option<String>) -> Result<Str
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn wallet_profiles_list() -> Result<Vec<wallet_vault::WalletProfileInfo>, String> {
-    wallet_vault::list_profiles()
+fn wallet_profiles_list(app: AppHandle) -> Result<Vec<wallet_vault::WalletProfileInfo>, String> {
+    let base = app_data_root_dir_v2(&app)?;
+    wallet_vault::list_profiles(&base)
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn wallet_profile_create_mnemonic(username: String, password: String, word_count: u32) -> Result<String, String> {
-    wallet_vault::create_profile_mnemonic(&username, &password, word_count)
+fn wallet_profile_create_mnemonic(app: AppHandle, username: String, password: String, word_count: u32) -> Result<String, String> {
+    let base = app_data_root_dir_v2(&app)?;
+    wallet_vault::create_profile_mnemonic(&base, &username, &password, word_count)
 }
 
 #[tauri::command(rename_all = "camelCase")]
 fn wallet_profile_import_mnemonic(
+    app: AppHandle,
     username: String,
     password: String,
     phrase: String,
     mnemonic_password: Option<String>,
 ) -> Result<(), String> {
+    let base = app_data_root_dir_v2(&app)?;
     wallet_vault::import_profile_mnemonic(
+        &base,
         &username,
         &password,
         &phrase,
@@ -259,23 +277,27 @@ fn wallet_profile_import_mnemonic(
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn wallet_profile_import_private_key(username: String, password: String, private_key_hex: String) -> Result<(), String> {
-    wallet_vault::import_profile_private_key(&username, &password, &private_key_hex)
+fn wallet_profile_import_private_key(app: AppHandle, username: String, password: String, private_key_hex: String) -> Result<(), String> {
+    let base = app_data_root_dir_v2(&app)?;
+    wallet_vault::import_profile_private_key(&base, &username, &password, &private_key_hex)
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn wallet_profile_delete(username: String) -> Result<(), String> {
-    wallet_vault::delete_profile(&username)
+fn wallet_profile_delete(app: AppHandle, username: String) -> Result<(), String> {
+    let base = app_data_root_dir_v2(&app)?;
+    wallet_vault::delete_profile(&base, &username)
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn wallet_profiles_clear_all() -> Result<(), String> {
-    wallet_vault::clear_all_profiles()
+fn wallet_profiles_clear_all(app: AppHandle) -> Result<(), String> {
+    let base = app_data_root_dir_v2(&app)?;
+    wallet_vault::clear_all_profiles(&base)
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn wallet_unlock(username: String, password: String) -> Result<(), String> {
-    wallet_vault::unlock_profile(&username, &password)
+fn wallet_unlock(app: AppHandle, username: String, password: String) -> Result<(), String> {
+    let base = app_data_root_dir_v2(&app)?;
+    wallet_vault::unlock_profile(&base, &username, &password)
 }
 
 #[tauri::command]
@@ -473,7 +495,8 @@ async fn wallet_send_file_path(
             return Err("invalid amountKas".to_string());
         }
 
-        let exe = find_kaspa_audio_transfer_binary()?;
+        let exe = find_kaspa_data_transfer_binary(&window)?;
+        let exe_display = exe.display().to_string();
         let mut cmd = Command::new(exe);
         cmd.arg("send")
             .arg(file_path)
@@ -500,7 +523,7 @@ async fn wallet_send_file_path(
 
         let mut child = cmd
             .spawn()
-            .map_err(|e| format!("failed to run kaspa_audio_transfer: {e}"))?;
+            .map_err(|e| format!("failed to run kaspa_data_transfer: {e}"))?;
 
         let stdout = child
             .stdout
@@ -581,7 +604,7 @@ async fn wallet_send_file_path(
 
         let status = child
             .wait()
-            .map_err(|e| format!("failed waiting for kaspa_audio_transfer: {e}"))?;
+            .map_err(|e| format!("failed waiting for kaspa_data_transfer: {e}"))?;
 
         let _ = stderr_handle.join();
 
@@ -589,7 +612,8 @@ async fn wallet_send_file_path(
             let stderr = stderr_buf.lock().unwrap_or_else(|e| e.into_inner());
             let stderr = stderr.trim();
             return Err(format!(
-                "kaspa_audio_transfer send failed with status {}: {}",
+                "kaspa_data_transfer send failed (helper: {}) with status {}: {}",
+                exe_display,
                 status,
                 if stderr.is_empty() { "<no stderr>" } else { stderr }
             ));
@@ -636,7 +660,8 @@ async fn wallet_receive_file(
             return Err("missing outputPath".to_string());
         }
 
-        let exe = find_kaspa_audio_transfer_binary()?;
+        let exe = find_kaspa_data_transfer_binary(&window)?;
+        let exe_display = exe.display().to_string();
         let mut cmd = Command::new(exe);
         cmd.arg("receive")
             .arg(tx_id)
@@ -657,7 +682,7 @@ async fn wallet_receive_file(
 
         let mut child = cmd
             .spawn()
-            .map_err(|e| format!("failed to run kaspa_audio_transfer: {e}"))?;
+            .map_err(|e| format!("failed to run kaspa_data_transfer: {e}"))?;
 
         let stdout = child
             .stdout
@@ -689,7 +714,7 @@ async fn wallet_receive_file(
 
         let status = child
             .wait()
-            .map_err(|e| format!("failed waiting for kaspa_audio_transfer: {e}"))?;
+            .map_err(|e| format!("failed waiting for kaspa_data_transfer: {e}"))?;
 
         let _ = stdout_handle.join();
         let _ = stderr_handle.join();
@@ -700,7 +725,8 @@ async fn wallet_receive_file(
             let stderr = stderr.trim();
             let stdout = stdout.trim();
             return Err(format!(
-                "kaspa_audio_transfer receive failed with status {}: {}{}{}",
+                "kaspa_data_transfer receive failed (helper: {}) with status {}: {}{}{}",
+                exe_display,
                 status,
                 if stderr.is_empty() { "" } else { stderr },
                 if !stderr.is_empty() && !stdout.is_empty() { "\n" } else { "" },
@@ -860,40 +886,104 @@ fn sanitize_filename(raw: &str) -> String {
     }
 }
 
-fn find_kaspa_audio_transfer_binary() -> Result<PathBuf, String> {
-    if let Ok(v) = std::env::var("KASPA_AUDIO_TRANSFER_BIN") {
-        let p = PathBuf::from(v);
-        if std::fs::metadata(&p).is_ok() {
-            return Ok(p);
-        }
-        return Err("KASPA_AUDIO_TRANSFER_BIN is set but points to a missing file".to_string());
-    }
-
+fn find_kaspa_data_transfer_binary(window: &Window) -> Result<PathBuf, String> {
     let exe_name = if cfg!(windows) {
-        "kaspa_audio_transfer.exe"
+        "kaspa_data_transfer.exe"
     } else {
-        "kaspa_audio_transfer"
+        "kaspa_data_transfer"
     };
 
-    // This file lives at: desktop/src-tauri/src/main.rs
-    // Repo root is 2 levels up from CARGO_MANIFEST_DIR (desktop/src-tauri)
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let repo_root = manifest_dir
-        .parent() // desktop
-        .and_then(|p| p.parent()) // repo root
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| manifest_dir.clone());
-
-    let debug = repo_root.join("target").join("debug").join(exe_name);
-    if std::fs::metadata(&debug).is_ok() {
-        return Ok(debug);
+    fn try_find_in_dir(dir: &Path, exe_name: &str, depth: usize) -> Option<PathBuf> {
+        if depth == 0 {
+            return None;
+        }
+        let direct = dir.join(exe_name);
+        if std::fs::metadata(&direct).is_ok() {
+            return Some(direct);
+        }
+        let entries = std::fs::read_dir(dir).ok()?;
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                if let Some(found) = try_find_in_dir(&p, exe_name, depth - 1) {
+                    return Some(found);
+                }
+            } else if p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.eq_ignore_ascii_case(exe_name)) {
+                if std::fs::metadata(&p).is_ok() {
+                    return Some(p);
+                }
+            }
+        }
+        None
     }
-    let release = repo_root.join("target").join("release").join(exe_name);
-    if std::fs::metadata(&release).is_ok() {
-        return Ok(release);
+
+    // Prefer the bundled resource shipped with the MSI.
+    // This avoids accidentally using a stale repo build when installed.
+    let candidates = [
+        exe_name.to_string(),
+        format!("target/release/{exe_name}"),
+        format!("resources/{exe_name}"),
+    ];
+
+    for c in candidates {
+        if let Ok(p) = window.app_handle().path().resolve(&c, BaseDirectory::Resource) {
+            if std::fs::metadata(&p).is_ok() {
+                return Ok(p);
+            }
+        }
     }
 
-    Err("kaspa_audio_transfer binary not found. Build it or set KASPA_AUDIO_TRANSFER_BIN".to_string())
+    if let Ok(dir) = window.app_handle().path().resource_dir() {
+        if let Some(found) = try_find_in_dir(&dir, exe_name, 6) {
+            return Ok(found);
+        }
+    }
+
+    // In release builds, we must not silently fall back to workspace binaries.
+    // That can cause the installed MSI to run a stale helper (e.g. target/debug).
+    #[cfg(not(debug_assertions))]
+    {
+        return Err("kaspa_data_transfer helper not found in app resources. Reinstall the MSI (or rebuild) to include kaspa_data_transfer.exe".to_string());
+    }
+
+    // Dev override (debug builds only).
+    #[cfg(debug_assertions)]
+    {
+        if let Ok(v) = std::env::var("KASPA_DATA_TRANSFER_BIN") {
+            let p = PathBuf::from(v);
+            if std::fs::metadata(&p).is_ok() {
+                return Ok(p);
+            }
+            return Err("KASPA_DATA_TRANSFER_BIN is set but points to a missing file".to_string());
+        }
+        if let Ok(v) = std::env::var("KASPA_AUDIO_TRANSFER_BIN") {
+            let p = PathBuf::from(v);
+            if std::fs::metadata(&p).is_ok() {
+                return Ok(p);
+            }
+            return Err("KASPA_AUDIO_TRANSFER_BIN is set but points to a missing file".to_string());
+        }
+
+        // This file lives at: desktop/src-tauri/src/main.rs
+        // Repo root is 2 levels up from CARGO_MANIFEST_DIR (desktop/src-tauri)
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let repo_root = manifest_dir
+            .parent() // desktop
+            .and_then(|p| p.parent()) // repo root
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| manifest_dir.clone());
+
+        let debug = repo_root.join("target").join("debug").join(exe_name);
+        if std::fs::metadata(&debug).is_ok() {
+            return Ok(debug);
+        }
+        let release = repo_root.join("target").join("release").join(exe_name);
+        if std::fs::metadata(&release).is_ok() {
+            return Ok(release);
+        }
+
+        Err("kaspa_data_transfer binary not found. Build it or set KASPA_DATA_TRANSFER_BIN".to_string())
+    }
 }
 
 fn decode_b64_payload(payload: &str) -> Result<Vec<u8>, String> {
@@ -956,7 +1046,13 @@ fn parse_submitted_chunks_from_line(line: &str) -> Option<(u32, Option<u32>)> {
 fn studio_temp_path(file_name: String) -> Result<String, String> {
     let safe = sanitize_filename(&file_name);
     let mut dir = std::env::temp_dir();
-    dir.push("KaspaAudioTransfer");
+    let old = dir.join("KaspaAudioTransfer");
+    let new = dir.join("KaspaDataTransfer");
+    if new.exists() || !old.exists() {
+        dir.push("KaspaDataTransfer");
+    } else {
+        dir.push("KaspaAudioTransfer");
+    }
     dir.push("studio");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let p = dir.join(safe);
@@ -969,7 +1065,13 @@ fn studio_write_temp_file_b64(file_name: String, file_b64: String) -> Result<Str
     let bytes = decode_b64_payload(&file_b64)?;
 
     let mut dir = std::env::temp_dir();
-    dir.push("KaspaAudioTransfer");
+    let old = dir.join("KaspaAudioTransfer");
+    let new = dir.join("KaspaDataTransfer");
+    if new.exists() || !old.exists() {
+        dir.push("KaspaDataTransfer");
+    } else {
+        dir.push("KaspaAudioTransfer");
+    }
     dir.push("studio");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
@@ -1096,14 +1198,15 @@ async fn wallet_core_send_file_b64(
         let safe_name = sanitize_filename(file_name.as_deref().unwrap_or("upload.bin"));
 
         let mut out_path = std::env::temp_dir();
-        let unique = format!("kaspa_audio_transfer_{}_{}", std::process::id(), safe_name);
+        let unique = format!("kaspa_data_transfer_{}_{}", std::process::id(), safe_name);
         out_path.push(unique);
         std::fs::write(&out_path, &bytes).map_err(|e| format!("failed to write temp file: {e}"))?;
 
-        let exe = find_kaspa_audio_transfer_binary()?;
+        let exe = find_kaspa_data_transfer_binary(&window)?;
+        let exe_display = exe.display().to_string();
         let mut cmd = Command::new(exe);
         cmd.arg("send")
-            .arg(&out_path)
+            .arg(out_path.to_string_lossy().to_string())
             .arg("--from-private-key")
             .arg(from_private_key)
             .arg("--to-address")
@@ -1127,7 +1230,7 @@ async fn wallet_core_send_file_b64(
 
         let mut child = cmd
             .spawn()
-            .map_err(|e| format!("failed to run kaspa_audio_transfer: {e}"))?;
+            .map_err(|e| format!("failed to run kaspa_data_transfer: {e}"))?;
 
         let stdout = child
             .stdout
@@ -1208,7 +1311,7 @@ async fn wallet_core_send_file_b64(
 
         let status = child
             .wait()
-            .map_err(|e| format!("failed waiting for kaspa_audio_transfer: {e}"))?;
+            .map_err(|e| format!("failed waiting for kaspa_data_transfer: {e}"))?;
 
         let _ = std::fs::remove_file(&out_path);
         let _ = stderr_handle.join();
@@ -1217,7 +1320,8 @@ async fn wallet_core_send_file_b64(
             let stderr = stderr_buf.lock().unwrap_or_else(|e| e.into_inner());
             let stderr = stderr.trim();
             return Err(format!(
-                "kaspa_audio_transfer send failed with status {}: {}",
+                "kaspa_data_transfer send failed (helper: {}) with status {}: {}",
+                exe_display,
                 status,
                 if stderr.is_empty() { "<no stderr>" } else { stderr }
             ));
@@ -1335,6 +1439,10 @@ fn reveal_in_folder(path: String) -> Result<(), String> {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![
             node_bundle_get_dir,
             node_bundle_set_dir,

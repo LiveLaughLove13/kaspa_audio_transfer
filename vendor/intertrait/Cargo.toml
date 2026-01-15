@@ -1,0 +1,18 @@
+[package]
+name = "intertrait"
+version = "0.2.2"
+edition = "2018"
+authors = ["CodeChain Team <hi@codechain.io>"]
+description = "Allow for inter-trait casting"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/CodeChain-io/intertrait"
+
+[dependencies]
+intertrait-macros = "=0.2.2"
+once_cell = "1.4"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+linkme = "0.2"
+
+[target.'cfg(target_os = "android")'.dependencies]
+ctor = "0.2"

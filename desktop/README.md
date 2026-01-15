@@ -1,25 +1,21 @@
-# Kaspa Audio Transfer Desktop (Tauri)
+# Kaspa Data Transfer Desktop (Tauri)
 
-This is a desktop GUI wrapper around the existing web UI + backend.
+This is the desktop GUI.
 
 ## What it does
 
-- Starts the local backend (`kaspa_file_web_backend`) on `http://127.0.0.1:8080`.
-- Opens a native window that loads the same interface.
-
-The app supports transferring any file type (not only audio).
+- Provides a native desktop UI for sending/receiving files.
 
 ## Dev run (Windows)
 
-1. Build the backend once (so the desktop app can start it quickly):
+1. Install Tauri CLI v2:
 
-   - `cargo build --manifest-path "web/backend/Cargo.toml"`
+   - `cargo install tauri-cli --version "^2" --locked`
 
 2. Run the desktop app:
 
-   - `cargo run --manifest-path "desktop/src-tauri/Cargo.toml"`
+   - Run this from `desktop/src-tauri`: `cargo tauri dev`
 
 ## Notes
 
-- If port `8080` is already used, close the other process or change `BACKEND_PORT` support later.
-- If the backend exe can’t be found, the app will fallback to running `cargo run` for the backend.
+- On Windows, building an `.msi` installer requires WiX Toolset.
