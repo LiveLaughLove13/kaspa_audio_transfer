@@ -81,7 +81,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.92.0
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          targets: aarch64-linux-android
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -107,7 +107,7 @@ jobs:
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
           export NDK_HOME="$ANDROID_SDK_ROOT/ndk/26.3.11579264"
           export CI=true
-          cargo tauri android build --apk true --aab true --ci -c ./src-tauri/tauri.conf.json
+          cargo tauri android build --target aarch64 --apk true --aab true --ci -c ./src-tauri/tauri.conf.json
 
       - name: Upload Android artifacts to GitHub Release
         shell: bash
