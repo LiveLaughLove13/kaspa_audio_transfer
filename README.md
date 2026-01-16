@@ -175,6 +175,10 @@ mobile\app\src-tauri\gen\android\app\build\outputs\apk\arm64\debug\app-arm64-deb
   - Ensure your node is fully synced and the gRPC port is reachable.
 - **Desktop MSI build fails on Windows**
   - Install WiX Toolset and try again.
+- **Build fails referencing an old path / drive letter**
+  - If you moved the repo (e.g. `E:\...` to `D:\...`) or switched between machines, clear cached build artifacts:
+    - From `desktop/src-tauri`: `cargo clean`
+    - Then rebuild: `cargo tauri build --bundles msi`
 - **Android build fails**
   - Confirm Android Studio SDK/NDK are installed and your JDK is configured.
 

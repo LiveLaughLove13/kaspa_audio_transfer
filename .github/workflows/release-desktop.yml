@@ -21,7 +21,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.79.0
+          toolchain: 1.92.0
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -30,14 +30,24 @@ jobs:
         run: choco install wixtoolset -y
 
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2" --locked
+        run: cargo install tauri-cli --version "2.9.6" --locked
 
       - name: Build Tauri bundle
         working-directory: desktop/src-tauri
         run: cargo tauri build --bundles msi
 
       - name: Upload bundles to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            desktop/src-tauri/target/release/bundle/msi/*.msi
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          gh release view "${TAG}" >/dev/null 2>&1 || gh release create "${TAG}" --title "${TAG}" --notes "" || true
+          shopt -s nullglob
+          MSI=(desktop/src-tauri/target/release/bundle/msi/*.msi)
+          if [ ${#MSI[@]} -eq 0 ]; then
+            echo "No MSI artifacts found to upload" >&2
+            exit 1
+          fi
+          gh release upload "${TAG}" "${MSI[@]}" --clobber

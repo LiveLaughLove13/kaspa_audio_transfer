@@ -36,6 +36,8 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.92.0
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -52,7 +54,11 @@ jobs:
           cp "target/release/${BIN_NAME}" "dist/kaspa_data_transfer-${{ matrix.artifact_suffix }}${{ matrix.bin_ext }}"
 
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/kaspa_data_transfer-${{ matrix.artifact_suffix }}${{ matrix.bin_ext }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          gh release view "${TAG}" >/dev/null 2>&1 || gh release create "${TAG}" --title "${TAG}" --notes "" || true
+          gh release upload "${TAG}" "dist/kaspa_data_transfer-${{ matrix.artifact_suffix }}${{ matrix.bin_ext }}" --clobber

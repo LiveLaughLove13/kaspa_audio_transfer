@@ -35,14 +35,14 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.79.0
+          toolchain: 1.92.0
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
 
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2" --locked
+        run: cargo install tauri-cli --version "2.9.6" --locked
 
       - name: Build Android APK + AAB
         working-directory: mobile/app
@@ -53,8 +53,18 @@ jobs:
           cargo tauri android build --apk true --aab true --ci -c ./src-tauri/tauri.conf.json
 
       - name: Upload Android artifacts to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            mobile/app/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
-            mobile/app/src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          gh release view "${TAG}" >/dev/null 2>&1 || gh release create "${TAG}" --title "${TAG}" --notes "" || true
+          shopt -s globstar nullglob
+          APK=(mobile/app/src-tauri/gen/android/app/build/outputs/apk/**/*.apk)
+          AAB=(mobile/app/src-tauri/gen/android/app/build/outputs/bundle/**/*.aab)
+          if [ ${#APK[@]} -eq 0 ] && [ ${#AAB[@]} -eq 0 ]; then
+            echo "No Android artifacts found to upload" >&2
+            exit 1
+          fi
+          gh release upload "${TAG}" "${APK[@]}" "${AAB[@]}" --clobber
