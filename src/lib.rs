@@ -48,6 +48,36 @@ pub async fn get_network_info(rpc_url: Option<&str>) -> Result<String> {
     kaspa.get_network_info().await
 }
 
+pub async fn wallet_balance_kas(from_private_key: &str, rpc_url: Option<&str>) -> Result<f64> {
+    let kaspa = KaspaClient::new(rpc_url).await?;
+    kaspa.wallet_balance_kas(from_private_key).await
+}
+
+pub async fn wallet_address(from_private_key: &str, rpc_url: Option<&str>) -> Result<String> {
+    let kaspa = KaspaClient::new(rpc_url).await?;
+    kaspa.wallet_address(from_private_key).await
+}
+
+pub async fn wallet_send_kas(
+    from_private_key: &str,
+    rpc_url: Option<&str>,
+    to_address: &str,
+    amount: f64,
+    feerate: Option<f64>,
+    fee_multiplier: Option<f64>,
+) -> Result<String> {
+    let kaspa = KaspaClient::new(rpc_url).await?;
+    kaspa
+        .wallet_send_kas_signed(
+            from_private_key,
+            to_address,
+            amount,
+            feerate,
+            fee_multiplier,
+        )
+        .await
+}
+
 pub async fn resolve_tx_accepting_block_hash(
     tx_id: &str,
     rpc_url: Option<&str>,

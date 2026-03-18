@@ -5,7 +5,9 @@ use kaspa_audio_transfer::audio::{read_audio_file, save_audio_file};
 use kaspa_audio_transfer::cli;
 use kaspa_audio_transfer::cli::Cli;
 use kaspa_audio_transfer::error::Result;
-use kaspa_audio_transfer::{receive_bytes, send_bytes};
+use kaspa_audio_transfer::{
+    receive_bytes, send_bytes, wallet_address, wallet_balance_kas, wallet_send_kas,
+};
 
 #[tokio::main]
 async fn main() {
@@ -72,6 +74,34 @@ async fn run() -> Result<()> {
         } => {
             let rpc_url = Some(rpc_url.as_str());
             estimate_audio(&input_file, &from_private_key, rpc_url, amount).await
+        }
+
+        cli::Commands::WalletBalance {
+            from_private_key,
+            rpc_url,
+        } => {
+            let rpc_url = Some(rpc_url.as_str());
+            show_wallet_balance(&from_private_key, rpc_url).await
+        }
+
+        cli::Commands::WalletSendKas {
+            from_private_key,
+            rpc_url,
+            to_address,
+            amount,
+            feerate,
+            fee_multiplier,
+        } => {
+            let rpc_url = Some(rpc_url.as_str());
+            wallet_send(
+                &from_private_key,
+                rpc_url,
+                &to_address,
+                amount,
+                feerate,
+                fee_multiplier,
+            )
+            .await
         }
 
         cli::Commands::TxAcceptingBlockHash {
@@ -204,5 +234,44 @@ async fn receive_audio(
     println!("\n✅ File received and saved successfully!");
     println!("You can now open the file at: {}", output_path);
 
+    Ok(())
+}
+
+async fn show_wallet_balance(from_private_key: &str, rpc_url: Option<&str>) -> Result<()> {
+    println!("Connecting to Kaspa node...");
+    let network_info = kaspa_audio_transfer::get_network_info(rpc_url).await?;
+    println!("Connected to network: {}", network_info);
+
+    let address = wallet_address(from_private_key, rpc_url).await?;
+    let balance = wallet_balance_kas(from_private_key, rpc_url).await?;
+    println!("\nAddress: {}", address);
+    println!("\nBalance: {:.8} KAS", balance);
+    Ok(())
+}
+
+async fn wallet_send(
+    from_private_key: &str,
+    rpc_url: Option<&str>,
+    to_address: &str,
+    amount: f64,
+    feerate: Option<f64>,
+    fee_multiplier: Option<f64>,
+) -> Result<()> {
+    println!("Connecting to Kaspa node...");
+    let network_info = kaspa_audio_transfer::get_network_info(rpc_url).await?;
+    println!("Connected to network: {}", network_info);
+
+    println!("\nSending {:.8} KAS to {}...", amount, to_address);
+    let tx_id = wallet_send_kas(
+        from_private_key,
+        rpc_url,
+        to_address,
+        amount,
+        feerate,
+        fee_multiplier,
+    )
+    .await?;
+    println!("\n✅ KAS sent successfully!");
+    println!("Transaction ID: {}", tx_id);
     Ok(())
 }

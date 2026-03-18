@@ -99,6 +99,44 @@ pub enum Commands {
         amount: f64,
     },
 
+    /// Get wallet balance (KAS) for a private key
+    WalletBalance {
+        /// Sender private key (32-byte hex, Schnorr)
+        #[arg(long)]
+        from_private_key: String,
+
+        /// Kaspa node RPC URL (e.g. grpc://127.0.0.1:16110, public, public:tn10)
+        #[arg(long, default_value = "grpc://127.0.0.1:16110")]
+        rpc_url: String,
+    },
+
+    /// Send KAS from a private key wallet
+    WalletSendKas {
+        /// Sender private key (32-byte hex, Schnorr)
+        #[arg(long)]
+        from_private_key: String,
+
+        /// Kaspa node RPC URL (e.g. grpc://127.0.0.1:16110, public, public:tn10)
+        #[arg(long, default_value = "grpc://127.0.0.1:16110")]
+        rpc_url: String,
+
+        /// Recipient's Kaspa address
+        #[arg(long)]
+        to_address: String,
+
+        /// Amount of KAS to send (in KAS). Must be > 0.
+        #[arg(long)]
+        amount: f64,
+
+        /// Optional custom fee rate override (in sompi/gram). If set, this value is used instead of node fee estimates.
+        #[arg(long)]
+        feerate: Option<f64>,
+
+        /// Optional multiplier applied to the node's priority feerate (e.g. 1.2). Ignored if --feerate is set.
+        #[arg(long)]
+        fee_multiplier: Option<f64>,
+    },
+
     /// Resolve a scan-usable start block hash for a transaction id (useful for receive --start-block-hash)
     TxAcceptingBlockHash {
         /// Transaction ID to resolve

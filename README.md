@@ -120,6 +120,26 @@ Resolve tx accepting block hash (local/default RPC, no public flag):
 kaspa_data_transfer tx-accepting-block-hash TX_ID --wait-secs 120
 ```
 
+Wallet balance (public resolver):
+```powershell
+kaspa_data_transfer wallet-balance --rpc-url public --from-private-key YOUR_PRIVATE_KEY
+```
+
+Wallet balance (local/default RPC, no public flag):
+```powershell
+kaspa_data_transfer wallet-balance --from-private-key YOUR_PRIVATE_KEY
+```
+
+Wallet send KAS (public resolver):
+```powershell
+kaspa_data_transfer wallet-send-kas --rpc-url public --from-private-key YOUR_PRIVATE_KEY --to-address kaspa:RECIPIENT_ADDRESS --amount 0.2
+```
+
+Wallet send KAS (local/default RPC, no public flag):
+```powershell
+kaspa_data_transfer wallet-send-kas --from-private-key YOUR_PRIVATE_KEY --to-address kaspa:RECIPIENT_ADDRESS --amount 0.2
+```
+
 ### RPC URL
 
 You can connect either to a local node (`grpc://...`) or a public resolver node:
