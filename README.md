@@ -140,6 +140,22 @@ Wallet send KAS (local/default RPC, no public flag):
 kaspa_data_transfer wallet-send-kas --from-private-key YOUR_PRIVATE_KEY --to-address kaspa:RECIPIENT_ADDRESS --amount 0.2
 ```
 
+Wallet address (public resolver):
+```powershell
+kaspa_data_transfer wallet-address --rpc-url public --from-private-key YOUR_PRIVATE_KEY
+```
+
+Wallet profile workflow (encrypted local vault):
+```powershell
+kaspa_data_transfer wallet-create-mnemonic --username alice --password "STRONG_PASSWORD" --word-count 12
+```
+```powershell
+kaspa_data_transfer wallet-balance --rpc-url public --profile-username alice --profile-password "STRONG_PASSWORD" --derivation-path "m/44'/111111'/0'/0/0"
+```
+```powershell
+kaspa_data_transfer wallet-send-kas --rpc-url public --profile-username alice --profile-password "STRONG_PASSWORD" --derivation-path "m/44'/111111'/0'/0/0" --to-address kaspa:RECIPIENT_ADDRESS --amount 0.2
+```
+
 ### RPC URL
 
 You can connect either to a local node (`grpc://...`) or a public resolver node:

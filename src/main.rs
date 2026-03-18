@@ -4,9 +4,10 @@ use std::process;
 use kaspa_audio_transfer::audio::{read_audio_file, save_audio_file};
 use kaspa_audio_transfer::cli;
 use kaspa_audio_transfer::cli::Cli;
-use kaspa_audio_transfer::error::Result;
+use kaspa_audio_transfer::error::{AudioTransferError, Result};
 use kaspa_audio_transfer::{
-    receive_bytes, send_bytes, wallet_address, wallet_balance_kas, wallet_send_kas,
+    connected_wallet_network, receive_bytes, send_bytes, wallet_address, wallet_balance_kas,
+    wallet_send_kas,
 };
 
 #[tokio::main]
@@ -76,16 +77,108 @@ async fn run() -> Result<()> {
             estimate_audio(&input_file, &from_private_key, rpc_url, amount).await
         }
 
-        cli::Commands::WalletBalance {
+        cli::Commands::WalletProfiles => {
+            let profiles = kaspa_audio_transfer::wallet_vault::list_profiles()?;
+            if profiles.is_empty() {
+                println!("No wallet profiles found.");
+            } else {
+                println!("Wallet profiles:");
+                for p in profiles {
+                    println!("- {p}");
+                }
+            }
+            Ok(())
+        }
+
+        cli::Commands::WalletCreateMnemonic {
+            username,
+            password,
+            word_count,
+            mnemonic_password,
+        } => {
+            let phrase = kaspa_audio_transfer::wallet_vault::create_profile_mnemonic(
+                &username,
+                &password,
+                word_count,
+                mnemonic_password.as_deref(),
+            )?;
+            println!("Created profile: {}", username);
+            println!("IMPORTANT: Save this mnemonic securely:");
+            println!("{}", phrase);
+            Ok(())
+        }
+
+        cli::Commands::WalletImportMnemonic {
+            username,
+            password,
+            phrase,
+            mnemonic_password,
+        } => {
+            kaspa_audio_transfer::wallet_vault::import_profile_mnemonic(
+                &username,
+                &password,
+                &phrase,
+                mnemonic_password.as_deref(),
+            )?;
+            println!("Imported profile: {}", username);
+            Ok(())
+        }
+
+        cli::Commands::WalletImportPrivateKey {
+            username,
+            password,
+            private_key,
+        } => {
+            kaspa_audio_transfer::wallet_vault::import_profile_private_key(
+                &username,
+                &password,
+                &private_key,
+            )?;
+            println!("Imported private-key profile: {}", username);
+            Ok(())
+        }
+
+        cli::Commands::WalletAddress {
             from_private_key,
+            profile_username,
+            profile_password,
+            derivation_path,
             rpc_url,
         } => {
             let rpc_url = Some(rpc_url.as_str());
-            show_wallet_balance(&from_private_key, rpc_url).await
+            show_wallet_address(
+                from_private_key.as_deref(),
+                profile_username.as_deref(),
+                profile_password.as_deref(),
+                &derivation_path,
+                rpc_url,
+            )
+            .await
+        }
+
+        cli::Commands::WalletBalance {
+            from_private_key,
+            profile_username,
+            profile_password,
+            derivation_path,
+            rpc_url,
+        } => {
+            let rpc_url = Some(rpc_url.as_str());
+            show_wallet_balance(
+                from_private_key.as_deref(),
+                profile_username.as_deref(),
+                profile_password.as_deref(),
+                &derivation_path,
+                rpc_url,
+            )
+            .await
         }
 
         cli::Commands::WalletSendKas {
             from_private_key,
+            profile_username,
+            profile_password,
+            derivation_path,
             rpc_url,
             to_address,
             amount,
@@ -94,7 +187,10 @@ async fn run() -> Result<()> {
         } => {
             let rpc_url = Some(rpc_url.as_str());
             wallet_send(
-                &from_private_key,
+                from_private_key.as_deref(),
+                profile_username.as_deref(),
+                profile_password.as_deref(),
+                &derivation_path,
                 rpc_url,
                 &to_address,
                 amount,
@@ -237,20 +333,91 @@ async fn receive_audio(
     Ok(())
 }
 
-async fn show_wallet_balance(from_private_key: &str, rpc_url: Option<&str>) -> Result<()> {
+async fn resolve_wallet_private_key(
+    from_private_key: Option<&str>,
+    profile_username: Option<&str>,
+    profile_password: Option<&str>,
+    derivation_path: &str,
+    rpc_url: Option<&str>,
+) -> Result<String> {
+    if let Some(k) = from_private_key {
+        return Ok(k.to_string());
+    }
+    let username = profile_username.ok_or_else(|| {
+        AudioTransferError::InvalidInput(
+            "Provide --from-private-key or (--profile-username and --profile-password)".to_string(),
+        )
+    })?;
+    let password = profile_password.ok_or_else(|| {
+        AudioTransferError::InvalidInput(
+            "Provide --from-private-key or (--profile-username and --profile-password)".to_string(),
+        )
+    })?;
+
+    let _ = connected_wallet_network(rpc_url).await?;
+    kaspa_audio_transfer::wallet_vault::derive_private_key_hex_for_profile(
+        username,
+        password,
+        derivation_path,
+    )
+}
+
+async fn show_wallet_address(
+    from_private_key: Option<&str>,
+    profile_username: Option<&str>,
+    profile_password: Option<&str>,
+    derivation_path: &str,
+    rpc_url: Option<&str>,
+) -> Result<()> {
     println!("Connecting to Kaspa node...");
     let network_info = kaspa_audio_transfer::get_network_info(rpc_url).await?;
     println!("Connected to network: {}", network_info);
 
-    let address = wallet_address(from_private_key, rpc_url).await?;
-    let balance = wallet_balance_kas(from_private_key, rpc_url).await?;
+    let from_private_key = resolve_wallet_private_key(
+        from_private_key,
+        profile_username,
+        profile_password,
+        derivation_path,
+        rpc_url,
+    )
+    .await?;
+    let address = wallet_address(&from_private_key, rpc_url).await?;
+    println!("\nAddress: {}", address);
+    Ok(())
+}
+
+async fn show_wallet_balance(
+    from_private_key: Option<&str>,
+    profile_username: Option<&str>,
+    profile_password: Option<&str>,
+    derivation_path: &str,
+    rpc_url: Option<&str>,
+) -> Result<()> {
+    println!("Connecting to Kaspa node...");
+    let network_info = kaspa_audio_transfer::get_network_info(rpc_url).await?;
+    println!("Connected to network: {}", network_info);
+
+    let from_private_key = resolve_wallet_private_key(
+        from_private_key,
+        profile_username,
+        profile_password,
+        derivation_path,
+        rpc_url,
+    )
+    .await?;
+    let address = wallet_address(&from_private_key, rpc_url).await?;
+    let balance = wallet_balance_kas(&from_private_key, rpc_url).await?;
     println!("\nAddress: {}", address);
     println!("\nBalance: {:.8} KAS", balance);
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn wallet_send(
-    from_private_key: &str,
+    from_private_key: Option<&str>,
+    profile_username: Option<&str>,
+    profile_password: Option<&str>,
+    derivation_path: &str,
     rpc_url: Option<&str>,
     to_address: &str,
     amount: f64,
@@ -261,9 +428,17 @@ async fn wallet_send(
     let network_info = kaspa_audio_transfer::get_network_info(rpc_url).await?;
     println!("Connected to network: {}", network_info);
 
+    let from_private_key = resolve_wallet_private_key(
+        from_private_key,
+        profile_username,
+        profile_password,
+        derivation_path,
+        rpc_url,
+    )
+    .await?;
     println!("\nSending {:.8} KAS to {}...", amount, to_address);
     let tx_id = wallet_send_kas(
-        from_private_key,
+        &from_private_key,
         rpc_url,
         to_address,
         amount,

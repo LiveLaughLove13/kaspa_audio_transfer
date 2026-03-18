@@ -99,22 +99,134 @@ pub enum Commands {
         amount: f64,
     },
 
-    /// Get wallet balance (KAS) for a private key
-    WalletBalance {
-        /// Sender private key (32-byte hex, Schnorr)
+    /// List local wallet profiles
+    WalletProfiles,
+
+    /// Create a new encrypted wallet profile using a generated mnemonic
+    WalletCreateMnemonic {
+        /// Profile username (unique)
         #[arg(long)]
-        from_private_key: String,
+        username: String,
+
+        /// Encryption password for this profile
+        #[arg(long)]
+        password: String,
+
+        /// Mnemonic word count (12 or 24)
+        #[arg(long, default_value_t = 12)]
+        word_count: u32,
+
+        /// Optional BIP39 mnemonic passphrase
+        #[arg(long)]
+        mnemonic_password: Option<String>,
+    },
+
+    /// Import an encrypted wallet profile from an existing mnemonic
+    WalletImportMnemonic {
+        /// Profile username (unique)
+        #[arg(long)]
+        username: String,
+
+        /// Encryption password for this profile
+        #[arg(long)]
+        password: String,
+
+        /// Mnemonic phrase
+        #[arg(long)]
+        phrase: String,
+
+        /// Optional BIP39 mnemonic passphrase
+        #[arg(long)]
+        mnemonic_password: Option<String>,
+    },
+
+    /// Import an encrypted wallet profile from a raw private key
+    WalletImportPrivateKey {
+        /// Profile username (unique)
+        #[arg(long)]
+        username: String,
+
+        /// Encryption password for this profile
+        #[arg(long)]
+        password: String,
+
+        /// Private key (32-byte hex, Schnorr)
+        #[arg(long)]
+        private_key: String,
+    },
+
+    /// Get wallet address from private key or encrypted profile
+    WalletAddress {
+        /// Sender private key (32-byte hex, Schnorr)
+        #[arg(
+            long,
+            conflicts_with_all = ["profile_username", "profile_password"]
+        )]
+        from_private_key: Option<String>,
+
+        /// Wallet profile username (requires --profile-password)
+        #[arg(long, requires = "profile_password")]
+        profile_username: Option<String>,
+
+        /// Wallet profile password (requires --profile-username)
+        #[arg(long, requires = "profile_username")]
+        profile_password: Option<String>,
+
+        /// Derivation path for mnemonic profiles
+        #[arg(long, default_value = "m/44'/111111'/0'/0/0")]
+        derivation_path: String,
 
         /// Kaspa node RPC URL (e.g. grpc://127.0.0.1:16110, public, public:tn10)
         #[arg(long, default_value = "grpc://127.0.0.1:16110")]
         rpc_url: String,
     },
 
-    /// Send KAS from a private key wallet
+    /// Get wallet balance (KAS) for a private key or encrypted profile
+    WalletBalance {
+        /// Sender private key (32-byte hex, Schnorr)
+        #[arg(
+            long,
+            conflicts_with_all = ["profile_username", "profile_password"]
+        )]
+        from_private_key: Option<String>,
+
+        /// Wallet profile username (requires --profile-password)
+        #[arg(long, requires = "profile_password")]
+        profile_username: Option<String>,
+
+        /// Wallet profile password (requires --profile-username)
+        #[arg(long, requires = "profile_username")]
+        profile_password: Option<String>,
+
+        /// Derivation path for mnemonic profiles
+        #[arg(long, default_value = "m/44'/111111'/0'/0/0")]
+        derivation_path: String,
+
+        /// Kaspa node RPC URL (e.g. grpc://127.0.0.1:16110, public, public:tn10)
+        #[arg(long, default_value = "grpc://127.0.0.1:16110")]
+        rpc_url: String,
+    },
+
+    /// Send KAS from a private key or encrypted profile wallet
     WalletSendKas {
         /// Sender private key (32-byte hex, Schnorr)
-        #[arg(long)]
-        from_private_key: String,
+        #[arg(
+            long,
+            conflicts_with_all = ["profile_username", "profile_password"]
+        )]
+        from_private_key: Option<String>,
+
+        /// Wallet profile username (requires --profile-password)
+        #[arg(long, requires = "profile_password")]
+        profile_username: Option<String>,
+
+        /// Wallet profile password (requires --profile-username)
+        #[arg(long, requires = "profile_username")]
+        profile_password: Option<String>,
+
+        /// Derivation path for mnemonic profiles
+        #[arg(long, default_value = "m/44'/111111'/0'/0/0")]
+        derivation_path: String,
 
         /// Kaspa node RPC URL (e.g. grpc://127.0.0.1:16110, public, public:tn10)
         #[arg(long, default_value = "grpc://127.0.0.1:16110")]

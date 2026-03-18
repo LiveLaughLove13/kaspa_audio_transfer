@@ -2403,6 +2403,27 @@ impl KaspaClient {
         ))
     }
 
+    pub async fn wallet_network_name(&self) -> Result<String> {
+        let dag = self
+            .rpc
+            .get_block_dag_info()
+            .await
+            .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
+
+        let network = match dag.network.network_type() {
+            NetworkType::Mainnet => "mainnet",
+            NetworkType::Testnet => "testnet",
+            NetworkType::Devnet => "devnet",
+            other => {
+                return Err(AudioTransferError::InvalidInput(format!(
+                    "Unsupported network type for wallet derivation: {other}"
+                )))
+            }
+        };
+
+        Ok(network.to_string())
+    }
+
     fn is_missing_header_error(msg: &str) -> bool {
         let m = msg.to_lowercase();
         m.contains("cannot find header") || m.contains("header not found")

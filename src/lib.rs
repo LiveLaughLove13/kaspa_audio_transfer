@@ -2,6 +2,7 @@ pub mod audio;
 pub mod cli;
 pub mod error;
 pub mod kaspa;
+pub mod wallet_vault;
 
 use crate::error::Result;
 use crate::kaspa::KaspaClient;
@@ -46,6 +47,11 @@ pub async fn receive_bytes(
 pub async fn get_network_info(rpc_url: Option<&str>) -> Result<String> {
     let kaspa = KaspaClient::new(rpc_url).await?;
     kaspa.get_network_info().await
+}
+
+pub async fn connected_wallet_network(rpc_url: Option<&str>) -> Result<String> {
+    let kaspa = KaspaClient::new(rpc_url).await?;
+    kaspa.wallet_network_name().await
 }
 
 pub async fn wallet_balance_kas(from_private_key: &str, rpc_url: Option<&str>) -> Result<f64> {
