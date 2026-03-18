@@ -17,7 +17,7 @@ pub enum Commands {
         /// Sender private key (32-byte hex, Schnorr)
         #[arg(long)]
         from_private_key: String,
-        
+
         /// Kaspa node RPC URL
         #[arg(long, default_value = "grpc://127.0.0.1:16110")]
         rpc_url: String,
@@ -37,11 +37,11 @@ pub enum Commands {
         /// Optional multiplier applied to the node's priority feerate (e.g. 1.2). Ignored if --feerate is set.
         #[arg(long)]
         fee_multiplier: Option<f64>,
-        
+
         /// Recipient's Kaspa address
         #[arg(long)]
         to_address: String,
-        
+
         /// Amount of KAS to send (in KAS)
         #[arg(long, default_value_t = 0.0)]
         amount: f64,
@@ -59,16 +59,16 @@ pub enum Commands {
         #[arg(long, default_value_t = 120)]
         start_block_hash_timeout_secs: u64,
     },
-    
+
     /// Receive and decode a file from the Kaspa network
     Receive {
         /// Transaction ID containing the file data
         tx_id: String,
-        
+
         /// Output file path (default: output.bin)
         #[arg(short, long, default_value = "output.bin")]
         output: String,
-        
+
         /// Kaspa node RPC URL
         #[arg(long, default_value = "grpc://127.0.0.1:16110")]
         rpc_url: String,

@@ -1,5 +1,7 @@
+use kaspa_consensus_core::constants::{
+    MAX_TX_IN_SEQUENCE_NUM, SOMPI_PER_KASPA, TX_VERSION, UNACCEPTED_DAA_SCORE,
+};
 use kaspa_rpc_core::api::rpc::RpcApi;
-use kaspa_consensus_core::constants::{SOMPI_PER_KASPA, UNACCEPTED_DAA_SCORE, MAX_TX_IN_SEQUENCE_NUM, TX_VERSION};
 
 use crate::error::{AudioTransferError, Result};
 use kaspa_addresses::{Address, Prefix, Version};
@@ -8,15 +10,18 @@ use kaspa_consensus_core::mass::MassCalculator;
 use kaspa_consensus_core::network::{NetworkId, NetworkType};
 use kaspa_consensus_core::sign;
 use kaspa_consensus_core::subnets::SUBNETWORK_ID_NATIVE;
-use kaspa_consensus_core::tx::{PopulatedTransaction, Transaction, TransactionId, TransactionInput, TransactionOutpoint, TransactionOutput, UtxoEntry};
+use kaspa_consensus_core::tx::{
+    PopulatedTransaction, Transaction, TransactionId, TransactionInput, TransactionOutpoint,
+    TransactionOutput, UtxoEntry,
+};
 #[cfg(feature = "grpc")]
 use kaspa_grpc_client::GrpcClient;
 use kaspa_rpc_core::model::{RpcDataVerbosityLevel, RpcHash, RpcTransactionId};
 #[cfg(feature = "grpc")]
 use kaspa_rpc_core::notify::mode::NotificationMode;
+use kaspa_txscript::pay_to_address_script;
 use kaspa_wrpc_client::client::ConnectOptions;
 use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
-use kaspa_txscript::pay_to_address_script;
 use rand::RngCore;
 use reqwest::Url;
 use secp256k1::Keypair;
@@ -72,7 +77,13 @@ fn rest_string_or_vec_to_vec(v: Option<RestStringOrVec>) -> Vec<String> {
 struct RestTxModel {
     payload: Option<String>,
     outputs: Option<Vec<RestTxOutput>>,
-    #[serde(default, alias = "blockHash", alias = "block_hash", alias = "blockHashes", alias = "block_hashes")]
+    #[serde(
+        default,
+        alias = "blockHash",
+        alias = "block_hash",
+        alias = "blockHashes",
+        alias = "block_hashes"
+    )]
     block_hashes: Option<RestStringOrVec>,
 }
 
@@ -134,9 +145,9 @@ impl KaspaClient {
             .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
 
             let rpc: Arc<dyn RpcApi + Send + Sync> = Arc::new(client);
-            rpc.get_info()
-                .await
-                .map_err(|e| AudioTransferError::KaspaRpc(format!("Failed to connect to Kaspa node: {e}")))?;
+            rpc.get_info().await.map_err(|e| {
+                AudioTransferError::KaspaRpc(format!("Failed to connect to Kaspa node: {e}"))
+            })?;
 
             eprintln!("Successfully connected to Kaspa node");
             return Ok(Self {
@@ -165,14 +176,20 @@ impl KaspaClient {
         if network == "devnet" {
             return Some(NetworkId::new(NetworkType::Devnet));
         }
-        if network == "testnet" || network == "tn10" || network == "testnet10" || network == "testnet-10" {
+        if network == "testnet"
+            || network == "tn10"
+            || network == "testnet10"
+            || network == "testnet-10"
+        {
             return Some(NetworkId::with_suffix(NetworkType::Testnet, 10));
         }
 
         None
     }
 
-    async fn connect_wrpc_via_resolver(network_id: NetworkId) -> Result<Arc<dyn RpcApi + Send + Sync>> {
+    async fn connect_wrpc_via_resolver(
+        network_id: NetworkId,
+    ) -> Result<Arc<dyn RpcApi + Send + Sync>> {
         let mut last_err: Option<String> = None;
 
         for attempt in 1..=Self::RESOLVER_MAX_UTXO_INDEX_ATTEMPTS {
@@ -232,8 +249,9 @@ impl KaspaClient {
     }
 
     fn parse_private_key_hex(hex_str: &str) -> Result<[u8; 32]> {
-        let bytes = hex::decode(hex_str)
-            .map_err(|e| AudioTransferError::InvalidInput(format!("Invalid private key hex: {e}")))?;
+        let bytes = hex::decode(hex_str).map_err(|e| {
+            AudioTransferError::InvalidInput(format!("Invalid private key hex: {e}"))
+        })?;
         if bytes.len() != 32 {
             return Err(AudioTransferError::InvalidInput(
                 "Private key must be 32 bytes (64 hex chars)".to_string(),
@@ -266,17 +284,17 @@ impl KaspaClient {
         Ok(est.priority_bucket.feerate)
     }
 
-    async fn resolve_feerate(&self, feerate: Option<f64>, fee_multiplier: Option<f64>) -> Result<f64> {
+    async fn resolve_feerate(
+        &self,
+        feerate: Option<f64>,
+        fee_multiplier: Option<f64>,
+    ) -> Result<f64> {
         let est = self
             .rpc
             .get_fee_estimate()
             .await
             .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
-        let min_feerate = est
-            .low_buckets
-            .first()
-            .map(|b| b.feerate)
-            .unwrap_or(0.0);
+        let min_feerate = est.low_buckets.first().map(|b| b.feerate).unwrap_or(0.0);
         let priority = est.priority_bucket.feerate;
 
         let mut effective = if let Some(v) = feerate {
@@ -340,9 +358,9 @@ impl KaspaClient {
         let mut url = Url::parse("https://api.kaspa.org")
             .map_err(|e| AudioTransferError::KaspaRpc(format!("REST url parse failed: {e}")))?;
         {
-            let mut seg = url
-                .path_segments_mut()
-                .map_err(|_| AudioTransferError::KaspaRpc("REST url cannot be a base".to_string()))?;
+            let mut seg = url.path_segments_mut().map_err(|_| {
+                AudioTransferError::KaspaRpc("REST url cannot be a base".to_string())
+            })?;
             seg.push("transactions");
             seg.push(tx_id);
         }
@@ -390,9 +408,9 @@ impl KaspaClient {
         let mut url = Url::parse("https://api.kaspa.org")
             .map_err(|e| AudioTransferError::KaspaRpc(format!("REST url parse failed: {e}")))?;
         {
-            let mut seg = url
-                .path_segments_mut()
-                .map_err(|_| AudioTransferError::KaspaRpc("REST url cannot be a base".to_string()))?;
+            let mut seg = url.path_segments_mut().map_err(|_| {
+                AudioTransferError::KaspaRpc("REST url cannot be a base".to_string())
+            })?;
             seg.push("addresses");
             seg.push(address);
             seg.push("full-transactions-page");
@@ -449,14 +467,21 @@ impl KaspaClient {
                 "REST transaction payload missing".to_string(),
             ));
         };
-        hex::decode(&p)
-            .map_err(|e| AudioTransferError::KaspaRpc(format!("REST payload hex decode failed: {e}")))
+        hex::decode(&p).map_err(|e| {
+            AudioTransferError::KaspaRpc(format!("REST payload hex decode failed: {e}"))
+        })
     }
 
-    async fn receive_audio_via_rest(&self, tx_id: &str, start_block_hash: Option<&str>) -> Result<Vec<u8>> {
+    async fn receive_audio_via_rest(
+        &self,
+        tx_id: &str,
+        start_block_hash: Option<&str>,
+    ) -> Result<Vec<u8>> {
         eprintln!("Info: falling back to api.kaspa.org for transaction/chunk retrieval");
 
-        let tx = self.rest_get_tx(tx_id, start_block_hash, false, true).await?;
+        let tx = self
+            .rest_get_tx(tx_id, start_block_hash, false, true)
+            .await?;
         let payload = Self::rest_payload_hex_to_bytes(tx.payload)?;
 
         if !Self::is_kat_payload(&payload) {
@@ -464,15 +489,22 @@ impl KaspaClient {
         }
 
         if payload.len() >= 5 && payload[4] == KAT_TYPE_CHUNK {
-            let Some((_file_id, _idx, _total, offset)) = Self::try_decode_chunk_header(&payload) else {
-                return Err(AudioTransferError::InvalidInput("Invalid chunk payload".to_string()));
+            let Some((_file_id, _idx, _total, offset)) = Self::try_decode_chunk_header(&payload)
+            else {
+                return Err(AudioTransferError::InvalidInput(
+                    "Invalid chunk payload".to_string(),
+                ));
             };
             if payload.len() < 33 {
-                return Err(AudioTransferError::InvalidInput("Invalid chunk payload".to_string()));
+                return Err(AudioTransferError::InvalidInput(
+                    "Invalid chunk payload".to_string(),
+                ));
             }
             let data_len = u32::from_le_bytes(payload[29..33].try_into().unwrap()) as usize;
             if offset + data_len > payload.len() {
-                return Err(AudioTransferError::InvalidInput("Invalid chunk payload".to_string()));
+                return Err(AudioTransferError::InvalidInput(
+                    "Invalid chunk payload".to_string(),
+                ));
             }
             return Ok(payload[offset..offset + data_len].to_vec());
         }
@@ -485,7 +517,9 @@ impl KaspaClient {
             .map(|outs| {
                 let mut uniq: Vec<String> = Vec::new();
                 for o in outs.iter() {
-                    let Some(a) = o.script_public_key_address.as_ref() else { continue; };
+                    let Some(a) = o.script_public_key_address.as_ref() else {
+                        continue;
+                    };
                     if a.trim().is_empty() {
                         continue;
                     }
@@ -525,19 +559,25 @@ impl KaspaClient {
                 ));
 
                 let prior_found = found_chunks;
-                let (txs, next_before) = self.rest_get_address_txs_page(addr, limit, before).await?;
+                let (txs, next_before) =
+                    self.rest_get_address_txs_page(addr, limit, before).await?;
                 if txs.is_empty() {
                     break;
                 }
                 for t in txs.iter() {
-                    let Some(payload_hex) = t.payload.as_ref() else { continue; };
-                    let Ok(p) = hex::decode(payload_hex) else { continue; };
+                    let Some(payload_hex) = t.payload.as_ref() else {
+                        continue;
+                    };
+                    let Ok(p) = hex::decode(payload_hex) else {
+                        continue;
+                    };
                     if let Some((file_id, idx, total, offset)) = Self::try_decode_chunk_header(&p) {
                         if file_id == manifest.file_id && total == manifest.total_chunks {
                             if p.len() < 33 {
                                 continue;
                             }
-                            let data_len = u32::from_le_bytes(p[29..33].try_into().unwrap()) as usize;
+                            let data_len =
+                                u32::from_le_bytes(p[29..33].try_into().unwrap()) as usize;
                             if offset + data_len > p.len() {
                                 continue;
                             }
@@ -595,7 +635,12 @@ impl KaspaClient {
         Ok(out)
     }
 
-    pub async fn estimate_audio_fees(&self, audio_data: &[u8], from_private_key_hex: &str, amount: f64) -> Result<()> {
+    pub async fn estimate_audio_fees(
+        &self,
+        audio_data: &[u8],
+        from_private_key_hex: &str,
+        amount: f64,
+    ) -> Result<()> {
         let send_value = (amount * SOMPI_PER_KASPA as f64) as u64;
         if send_value == 0 {
             return Err(AudioTransferError::InvalidInput(
@@ -656,7 +701,10 @@ impl KaspaClient {
                 MAX_TX_IN_SEQUENCE_NUM,
                 1,
             )],
-            vec![TransactionOutput::new(initial_entry_amount.max(1), self_spk.clone())],
+            vec![TransactionOutput::new(
+                initial_entry_amount.max(1),
+                self_spk.clone(),
+            )],
             0,
             SUBNETWORK_ID_NATIVE,
             0,
@@ -731,7 +779,9 @@ impl KaspaClient {
                     break;
                 }
                 Err(AudioTransferError::KaspaRpc(msg))
-                    if msg.to_lowercase().contains("insufficient funds for chunk fees") =>
+                    if msg
+                        .to_lowercase()
+                        .contains("insufficient funds for chunk fees") =>
                 {
                     assumed_input_amount = assumed_input_amount
                         .saturating_mul(2)
@@ -831,14 +881,23 @@ impl KaspaClient {
             params.storage_mass_parameter,
         );
 
-        let (initial_outpoint, initial_entry_amount, initial_entry_spk) =
-            self.resolve_initial_utxo(&from_addr, resume_from, resume_output_index).await?;
+        let (initial_outpoint, initial_entry_amount, initial_entry_spk) = self
+            .resolve_initial_utxo(&from_addr, resume_from, resume_output_index)
+            .await?;
 
         let chunk_overhead = 4 + 1 + 16 + 4 + 4 + 4;
         let chunk_template = Transaction::new(
             TX_VERSION,
-            vec![TransactionInput::new(initial_outpoint, Vec::new(), MAX_TX_IN_SEQUENCE_NUM, 1)],
-            vec![TransactionOutput::new(initial_entry_amount.max(1), self_spk.clone())],
+            vec![TransactionInput::new(
+                initial_outpoint,
+                Vec::new(),
+                MAX_TX_IN_SEQUENCE_NUM,
+                1,
+            )],
+            vec![TransactionOutput::new(
+                initial_entry_amount.max(1),
+                self_spk.clone(),
+            )],
             0,
             SUBNETWORK_ID_NATIVE,
             0,
@@ -852,7 +911,9 @@ impl KaspaClient {
             initial_entry_spk.clone(),
         );
         if max_payload_chunk <= chunk_overhead + 1 {
-            return Err(AudioTransferError::KaspaRpc("Unable to compute safe chunk payload size".to_string()));
+            return Err(AudioTransferError::KaspaRpc(
+                "Unable to compute safe chunk payload size".to_string(),
+            ));
         }
         let chunk_data_size = (max_payload_chunk - chunk_overhead).min(MAX_CHUNK_DATA_SIZE);
         let total_chunks = ((audio_data.len() + chunk_data_size - 1) / chunk_data_size) as u32;
@@ -882,18 +943,28 @@ impl KaspaClient {
             Self::encode_manifest_payload(&manifest),
         )?;
         if manifest_change == 0 {
-            return Err(AudioTransferError::KaspaRpc("Insufficient funds for manifest tx".to_string()));
+            return Err(AudioTransferError::KaspaRpc(
+                "Insufficient funds for manifest tx".to_string(),
+            ));
         }
 
         let mut outputs = Vec::new();
         if send_value > 0 {
             outputs.push(TransactionOutput::new(send_value, to_spk.clone()));
         }
-        outputs.push(TransactionOutput::new(manifest_change.max(1), self_spk.clone()));
+        outputs.push(TransactionOutput::new(
+            manifest_change.max(1),
+            self_spk.clone(),
+        ));
 
         let mut manifest_tx = Transaction::new(
             TX_VERSION,
-            vec![TransactionInput::new(initial_outpoint, Vec::new(), MAX_TX_IN_SEQUENCE_NUM, 1)],
+            vec![TransactionInput::new(
+                initial_outpoint,
+                Vec::new(),
+                MAX_TX_IN_SEQUENCE_NUM,
+                1,
+            )],
             outputs,
             0,
             SUBNETWORK_ID_NATIVE,
@@ -913,7 +984,9 @@ impl KaspaClient {
             )],
         );
         let non_ctx = mass_calc.calc_non_contextual_masses(&manifest_tx);
-        if non_ctx.compute_mass > MAX_STANDARD_COMPUTE_MASS || non_ctx.transient_mass > MAX_STANDARD_TRANSIENT_MASS {
+        if non_ctx.compute_mass > MAX_STANDARD_COMPUTE_MASS
+            || non_ctx.transient_mass > MAX_STANDARD_TRANSIENT_MASS
+        {
             return Err(AudioTransferError::KaspaRpc(format!(
                 "Manifest not standard (compute_mass={}, transient_mass={})",
                 non_ctx.compute_mass, non_ctx.transient_mass
@@ -929,7 +1002,16 @@ impl KaspaClient {
             )));
         }
         manifest_tx.set_mass(ctx.storage_mass);
-        manifest_tx = Self::finalize_and_sign_single_input(manifest_tx, kaspa_consensus_core::tx::UtxoEntry::new(initial_entry_amount, initial_entry_spk.clone(), UNACCEPTED_DAA_SCORE, false), &keypair)?;
+        manifest_tx = Self::finalize_and_sign_single_input(
+            manifest_tx,
+            kaspa_consensus_core::tx::UtxoEntry::new(
+                initial_entry_amount,
+                initial_entry_spk.clone(),
+                UNACCEPTED_DAA_SCORE,
+                false,
+            ),
+            &keypair,
+        )?;
 
         let manifest_txid: RpcTransactionId = self
             .rpc
@@ -940,7 +1022,12 @@ impl KaspaClient {
 
         let change_index = if send_value > 0 { 1 } else { 0 };
         let mut next_outpoint = TransactionOutpoint::new(manifest_tx.id(), change_index);
-        let mut next_entry = kaspa_consensus_core::tx::UtxoEntry::new(manifest_change, self_spk.clone(), UNACCEPTED_DAA_SCORE, false);
+        let mut next_entry = kaspa_consensus_core::tx::UtxoEntry::new(
+            manifest_change,
+            self_spk.clone(),
+            UNACCEPTED_DAA_SCORE,
+            false,
+        );
         let mut chain_value = manifest_change;
         let mut total_chunk_fees: u64 = 0;
 
@@ -948,11 +1035,17 @@ impl KaspaClient {
             let start = (chunk_index as usize) * chunk_data_size;
             let end = (start + chunk_data_size).min(audio_data.len());
             let data = &audio_data[start..end];
-            let payload = Self::encode_chunk_payload(&manifest.file_id, chunk_index, total_chunks, data);
+            let payload =
+                Self::encode_chunk_payload(&manifest.file_id, chunk_index, total_chunks, data);
 
             let mut tx = Transaction::new(
                 TX_VERSION,
-                vec![TransactionInput::new(next_outpoint, Vec::new(), MAX_TX_IN_SEQUENCE_NUM, 1)],
+                vec![TransactionInput::new(
+                    next_outpoint,
+                    Vec::new(),
+                    MAX_TX_IN_SEQUENCE_NUM,
+                    1,
+                )],
                 vec![TransactionOutput::new(chain_value.max(1), self_spk.clone())],
                 0,
                 SUBNETWORK_ID_NATIVE,
@@ -969,7 +1062,9 @@ impl KaspaClient {
             )?;
             total_chunk_fees = total_chunk_fees.saturating_add(chunk_fee);
             if out_value == 0 {
-                return Err(AudioTransferError::KaspaRpc("Insufficient funds for chunk fee".to_string()));
+                return Err(AudioTransferError::KaspaRpc(
+                    "Insufficient funds for chunk fee".to_string(),
+                ));
             }
 
             tx.outputs[0].value = out_value;
@@ -979,7 +1074,9 @@ impl KaspaClient {
 
             let populated = PopulatedTransaction::new(&tx, vec![next_entry.clone()]);
             let non_ctx = mass_calc.calc_non_contextual_masses(&tx);
-            if non_ctx.compute_mass > MAX_STANDARD_COMPUTE_MASS || non_ctx.transient_mass > MAX_STANDARD_TRANSIENT_MASS {
+            if non_ctx.compute_mass > MAX_STANDARD_COMPUTE_MASS
+                || non_ctx.transient_mass > MAX_STANDARD_TRANSIENT_MASS
+            {
                 return Err(AudioTransferError::KaspaRpc(format!(
                     "Chunk {chunk_index} not standard (compute_mass={}, transient_mass={})",
                     non_ctx.compute_mass, non_ctx.transient_mass
@@ -1005,10 +1102,20 @@ impl KaspaClient {
 
             next_outpoint = TransactionOutpoint::new(tx.id(), 0);
             chain_value = out_value;
-            next_entry = kaspa_consensus_core::tx::UtxoEntry::new(out_value, self_spk.clone(), UNACCEPTED_DAA_SCORE, false);
+            next_entry = kaspa_consensus_core::tx::UtxoEntry::new(
+                out_value,
+                self_spk.clone(),
+                UNACCEPTED_DAA_SCORE,
+                false,
+            );
 
             if (chunk_index + 1) % 10 == 0 || chunk_index + 1 == total_chunks {
-                println!("Submitted chunk {}/{}: {}", chunk_index + 1, total_chunks, submitted);
+                println!(
+                    "Submitted chunk {}/{}: {}",
+                    chunk_index + 1,
+                    total_chunks,
+                    submitted
+                );
             }
         }
 
@@ -1028,10 +1135,15 @@ impl KaspaClient {
         from_addr: &Address,
         resume_from: Option<&str>,
         resume_output_index: u32,
-    ) -> Result<(TransactionOutpoint, u64, kaspa_consensus_core::tx::ScriptPublicKey)> {
+    ) -> Result<(
+        TransactionOutpoint,
+        u64,
+        kaspa_consensus_core::tx::ScriptPublicKey,
+    )> {
         if let Some(resume_txid_str) = resume_from {
-            let resume_txid = TransactionId::from_str(resume_txid_str)
-                .map_err(|e| AudioTransferError::InvalidInput(format!("Invalid resume_from txid: {e}")))?;
+            let resume_txid = TransactionId::from_str(resume_txid_str).map_err(|e| {
+                AudioTransferError::InvalidInput(format!("Invalid resume_from txid: {e}"))
+            })?;
             let outpoint = TransactionOutpoint::new(resume_txid, resume_output_index);
             let idx = resume_output_index as usize;
 
@@ -1143,7 +1255,9 @@ impl KaspaClient {
         tx.finalize();
 
         let base_non_ctx = mass_calc.calc_non_contextual_masses(&tx);
-        if base_non_ctx.compute_mass > MAX_STANDARD_COMPUTE_MASS || base_non_ctx.transient_mass > MAX_STANDARD_TRANSIENT_MASS {
+        if base_non_ctx.compute_mass > MAX_STANDARD_COMPUTE_MASS
+            || base_non_ctx.transient_mass > MAX_STANDARD_TRANSIENT_MASS
+        {
             return 0;
         }
         if input_amount == 0 {
@@ -1167,12 +1281,15 @@ impl KaspaClient {
             tx.finalize();
 
             let non_ctx = mass_calc.calc_non_contextual_masses(&tx);
-            if non_ctx.compute_mass > MAX_STANDARD_COMPUTE_MASS || non_ctx.transient_mass > MAX_STANDARD_TRANSIENT_MASS {
+            if non_ctx.compute_mass > MAX_STANDARD_COMPUTE_MASS
+                || non_ctx.transient_mass > MAX_STANDARD_TRANSIENT_MASS
+            {
                 hi = mid - 1;
                 continue;
             }
 
-            let entry = UtxoEntry::new(input_amount, input_spk.clone(), UNACCEPTED_DAA_SCORE, false);
+            let entry =
+                UtxoEntry::new(input_amount, input_spk.clone(), UNACCEPTED_DAA_SCORE, false);
             let populated = PopulatedTransaction::new(&tx, vec![entry]);
             let Some(ctx) = mass_calc.calc_contextual_masses(&populated) else {
                 hi = mid - 1;
@@ -1441,7 +1558,11 @@ impl KaspaClient {
         Ok((fees, amount))
     }
 
-    fn finalize_and_sign_single_input(mut tx: Transaction, entry: UtxoEntry, keypair: &Keypair) -> Result<Transaction> {
+    fn finalize_and_sign_single_input(
+        mut tx: Transaction,
+        entry: UtxoEntry,
+        keypair: &Keypair,
+    ) -> Result<Transaction> {
         if tx.inputs.is_empty() {
             return Err(AudioTransferError::KaspaRpc(
                 "Transaction must have at least one input".to_string(),
@@ -1475,8 +1596,9 @@ impl KaspaClient {
                 .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
 
             let mut start_hash: RpcHash = if let Some(h) = effective_start_block_hash {
-                RpcHash::from_str(h)
-                    .map_err(|e| AudioTransferError::KaspaRpc(format!("Invalid start_block_hash: {e}")))?
+                RpcHash::from_str(h).map_err(|e| {
+                    AudioTransferError::KaspaRpc(format!("Invalid start_block_hash: {e}"))
+                })?
             } else {
                 dag.pruning_point_hash
             };
@@ -1506,7 +1628,11 @@ impl KaspaClient {
                     tx_id,
                     page,
                     start_hash,
-                    if used_user_start_hash { " (user start)" } else { "" }
+                    if used_user_start_hash {
+                        " (user start)"
+                    } else {
+                        ""
+                    }
                 ));
 
                 let mut attempt: u32 = 0;
@@ -1514,7 +1640,11 @@ impl KaspaClient {
                 let response = loop {
                     attempt += 1;
                     match rpc
-                        .get_virtual_chain_from_block_v2(start_hash, Some(RpcDataVerbosityLevel::Full), Some(page_limit))
+                        .get_virtual_chain_from_block_v2(
+                            start_hash,
+                            Some(RpcDataVerbosityLevel::Full),
+                            Some(page_limit),
+                        )
                         .await
                     {
                         Ok(resp) => break resp,
@@ -1546,7 +1676,9 @@ impl KaspaClient {
 
                 for block in response.chain_block_accepted_transactions.iter() {
                     for tx in block.accepted_transactions.iter() {
-                        let Some(p) = tx.payload.as_ref() else { continue; };
+                        let Some(p) = tx.payload.as_ref() else {
+                            continue;
+                        };
                         let is_target = tx
                             .verbose_data
                             .as_ref()
@@ -1589,7 +1721,11 @@ impl KaspaClient {
         }
     }
 
-    pub async fn receive_audio(&self, tx_id: &str, start_block_hash: Option<&str>) -> Result<Vec<u8>> {
+    pub async fn receive_audio(
+        &self,
+        tx_id: &str,
+        start_block_hash: Option<&str>,
+    ) -> Result<Vec<u8>> {
         let tx_id_str = tx_id;
         println!("Fetching transaction: {}", tx_id);
         let tx_id = TransactionId::from_str(tx_id_str)
@@ -1617,7 +1753,8 @@ impl KaspaClient {
             Vec::new()
         };
 
-        let mut effective_start_block_hash: Option<String> = start_block_hash.map(|s| s.to_string());
+        let mut effective_start_block_hash: Option<String> =
+            start_block_hash.map(|s| s.to_string());
         if effective_start_block_hash.is_none() && !remaining_auto_anchors.is_empty() {
             effective_start_block_hash = Some(remaining_auto_anchors.remove(0));
         }
@@ -1643,7 +1780,10 @@ impl KaspaClient {
                                 reconnects,
                                 Self::RESOLVER_RECONNECT_ATTEMPTS
                             );
-                            sleep(Duration::from_millis(250u64.saturating_mul(reconnects as u64))).await;
+                            sleep(Duration::from_millis(
+                                250u64.saturating_mul(reconnects as u64),
+                            ))
+                            .await;
                             let network_id = self
                                 .resolver_network_id
                                 .unwrap_or_else(|| NetworkId::new(NetworkType::Mainnet));
@@ -1657,12 +1797,18 @@ impl KaspaClient {
                                 e
                             );
                             return self
-                                .receive_audio_via_rest(tx_id_str, effective_start_block_hash.as_deref())
+                                .receive_audio_via_rest(
+                                    tx_id_str,
+                                    effective_start_block_hash.as_deref(),
+                                )
                                 .await;
                         }
                         if Self::should_use_rest_fallback(&e) {
                             return self
-                                .receive_audio_via_rest(tx_id_str, effective_start_block_hash.as_deref())
+                                .receive_audio_via_rest(
+                                    tx_id_str,
+                                    effective_start_block_hash.as_deref(),
+                                )
                                 .await;
                         }
                         return Err(e);
@@ -1676,8 +1822,11 @@ impl KaspaClient {
         }
 
         if payload.len() >= 5 && payload[4] == KAT_TYPE_CHUNK {
-            let Some((_file_id, _idx, _total, offset)) = Self::try_decode_chunk_header(&payload) else {
-                return Err(AudioTransferError::InvalidInput("Invalid chunk payload".to_string()));
+            let Some((_file_id, _idx, _total, offset)) = Self::try_decode_chunk_header(&payload)
+            else {
+                return Err(AudioTransferError::InvalidInput(
+                    "Invalid chunk payload".to_string(),
+                ));
             };
             let data_len = u32::from_le_bytes(payload[29..33].try_into().unwrap()) as usize;
             return Ok(payload[offset..offset + data_len].to_vec());
@@ -1711,13 +1860,15 @@ impl KaspaClient {
 
         let mut chunk_reconnects: u32 = 0;
         loop {
-            let dag = rpc.get_block_dag_info()
+            let dag = rpc
+                .get_block_dag_info()
                 .await
                 .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
 
             let mut start_hash: RpcHash = if let Some(h) = effective_start_block_hash.as_deref() {
-                RpcHash::from_str(h)
-                    .map_err(|e| AudioTransferError::KaspaRpc(format!("Invalid start_block_hash: {e}")))?
+                RpcHash::from_str(h).map_err(|e| {
+                    AudioTransferError::KaspaRpc(format!("Invalid start_block_hash: {e}"))
+                })?
             } else {
                 dag.pruning_point_hash
             };
@@ -1744,21 +1895,31 @@ impl KaspaClient {
                     chunks.len(),
                     page,
                     start_hash,
-                    if used_user_start_hash { " (user start)" } else { "" }
+                    if used_user_start_hash {
+                        " (user start)"
+                    } else {
+                        ""
+                    }
                 ));
                 let mut attempt: u32 = 0;
                 let mut backoff_ms: u64 = 250;
                 let response = loop {
                     attempt += 1;
                     match rpc
-                        .get_virtual_chain_from_block_v2(start_hash, Some(RpcDataVerbosityLevel::Full), Some(page_limit))
+                        .get_virtual_chain_from_block_v2(
+                            start_hash,
+                            Some(RpcDataVerbosityLevel::Full),
+                            Some(page_limit),
+                        )
                         .await
                     {
                         Ok(resp) => break resp,
                         Err(e) => {
                             let msg = e.to_string();
                             if self.is_public_resolver
-                                && Self::is_resolver_disconnect_error(&AudioTransferError::KaspaRpc(msg.clone()))
+                                && Self::is_resolver_disconnect_error(
+                                    &AudioTransferError::KaspaRpc(msg.clone()),
+                                )
                                 && chunk_reconnects < Self::RESOLVER_RECONNECT_ATTEMPTS
                             {
                                 chunk_reconnects += 1;
@@ -1768,21 +1929,29 @@ impl KaspaClient {
                                     chunk_reconnects,
                                     Self::RESOLVER_RECONNECT_ATTEMPTS
                                 );
-                                sleep(Duration::from_millis(250u64.saturating_mul(chunk_reconnects as u64))).await;
+                                sleep(Duration::from_millis(
+                                    250u64.saturating_mul(chunk_reconnects as u64),
+                                ))
+                                .await;
                                 let network_id = self
                                     .resolver_network_id
                                     .unwrap_or_else(|| NetworkId::new(NetworkType::Mainnet));
                                 rpc = Self::connect_wrpc_via_resolver(network_id).await?;
                                 continue;
                             }
-                            if Self::should_use_rest_fallback(&AudioTransferError::KaspaRpc(msg.clone())) {
+                            if Self::should_use_rest_fallback(&AudioTransferError::KaspaRpc(
+                                msg.clone(),
+                            )) {
                                 Self::progress_end();
                                 eprintln!(
                                     "Info: RPC scan failed ({}); falling back to api.kaspa.org for retrieval",
                                     msg
                                 );
                                 return self
-                                    .receive_audio_via_rest(tx_id_str, effective_start_block_hash.as_deref())
+                                    .receive_audio_via_rest(
+                                        tx_id_str,
+                                        effective_start_block_hash.as_deref(),
+                                    )
                                     .await;
                             }
                             if used_user_start_hash && Self::is_missing_header_error(&msg) {
@@ -1811,15 +1980,21 @@ impl KaspaClient {
 
                 for block in response.chain_block_accepted_transactions.iter() {
                     for tx in block.accepted_transactions.iter() {
-                        let Some(p) = tx.payload.as_ref() else { continue; };
-                        if let Some((file_id, idx, total, offset)) = Self::try_decode_chunk_header(p) {
+                        let Some(p) = tx.payload.as_ref() else {
+                            continue;
+                        };
+                        if let Some((file_id, idx, total, offset)) =
+                            Self::try_decode_chunk_header(p)
+                        {
                             if file_id == manifest.file_id && total == manifest.total_chunks {
-                                let data_len = u32::from_le_bytes(p[29..33].try_into().unwrap()) as usize;
+                                let data_len =
+                                    u32::from_le_bytes(p[29..33].try_into().unwrap()) as usize;
                                 if (idx as usize) < chunks.len() {
                                     if chunks[idx as usize].is_none() {
                                         found_chunks = found_chunks.saturating_add(1);
                                     }
-                                    chunks[idx as usize] = Some(p[offset..offset + data_len].to_vec());
+                                    chunks[idx as usize] =
+                                        Some(p[offset..offset + data_len].to_vec());
                                 }
                             }
                         }
@@ -1868,7 +2043,9 @@ impl KaspaClient {
             eprintln!(
                 "Info: unable to locate all chunks via node RPC scan; falling back to api.kaspa.org. Hint: for reliable RPC retrieval, pass receive --start-block-hash using an explorer 'Block hashes' value (scan anchor) rather than the txid."
             );
-            return self.receive_audio_via_rest(tx_id_str, start_block_hash).await;
+            return self
+                .receive_audio_via_rest(tx_id_str, start_block_hash)
+                .await;
         }
 
         let mut out = Vec::with_capacity(manifest.total_size as usize);
@@ -1906,8 +2083,9 @@ impl KaspaClient {
                 .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
 
             let mut start_hash: RpcHash = if let Some(h) = effective_start_block_hash {
-                RpcHash::from_str(h)
-                    .map_err(|e| AudioTransferError::KaspaRpc(format!("Invalid start_block_hash: {e}")))?
+                RpcHash::from_str(h).map_err(|e| {
+                    AudioTransferError::KaspaRpc(format!("Invalid start_block_hash: {e}"))
+                })?
             } else {
                 dag.pruning_point_hash
             };
@@ -1920,7 +2098,11 @@ impl KaspaClient {
                     tx_id,
                     page,
                     start_hash,
-                    if used_user_start_hash { " (user start)" } else { "" }
+                    if used_user_start_hash {
+                        " (user start)"
+                    } else {
+                        ""
+                    }
                 ));
 
                 let mut attempt: u32 = 0;
@@ -1929,7 +2111,11 @@ impl KaspaClient {
                     attempt += 1;
                     match self
                         .rpc
-                        .get_virtual_chain_from_block(start_hash, true, Some(min_confirmation_count))
+                        .get_virtual_chain_from_block(
+                            start_hash,
+                            true,
+                            Some(min_confirmation_count),
+                        )
                         .await
                     {
                         Ok(resp) => break resp,
@@ -1960,7 +2146,11 @@ impl KaspaClient {
                 };
 
                 for bucket in response.accepted_transaction_ids.iter() {
-                    if bucket.accepted_transaction_ids.iter().any(|id| *id == tx_id) {
+                    if bucket
+                        .accepted_transaction_ids
+                        .iter()
+                        .any(|id| *id == tx_id)
+                    {
                         Self::progress_end();
                         eprintln!(
                             "Accepting block hash (may be unavailable locally on pruned nodes): {}",
