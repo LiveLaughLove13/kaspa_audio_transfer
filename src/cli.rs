@@ -18,7 +18,7 @@ pub enum Commands {
         #[arg(long)]
         from_private_key: String,
 
-        /// Kaspa node RPC URL
+        /// Kaspa node RPC URL (e.g. grpc://127.0.0.1:16110, public, public:tn10)
         #[arg(long, default_value = "grpc://127.0.0.1:16110")]
         rpc_url: String,
 
@@ -42,7 +42,7 @@ pub enum Commands {
         #[arg(long)]
         to_address: String,
 
-        /// Amount of KAS to send (in KAS)
+        /// Amount of KAS to send (in KAS). Must be > 0 for normal sends; can be 0 only when using --resume-from.
         #[arg(long, default_value_t = 0.0)]
         amount: f64,
 
@@ -69,7 +69,7 @@ pub enum Commands {
         #[arg(short, long, default_value = "output.bin")]
         output: String,
 
-        /// Kaspa node RPC URL
+        /// Kaspa node RPC URL (e.g. grpc://127.0.0.1:16110, public, public:tn10)
         #[arg(long, default_value = "grpc://127.0.0.1:16110")]
         rpc_url: String,
 
@@ -90,7 +90,7 @@ pub enum Commands {
         #[arg(long)]
         from_private_key: String,
 
-        /// Kaspa node RPC URL
+        /// Kaspa node RPC URL (e.g. grpc://127.0.0.1:16110, public, public:tn10)
         #[arg(long, default_value = "grpc://127.0.0.1:16110")]
         rpc_url: String,
 
@@ -104,7 +104,7 @@ pub enum Commands {
         /// Transaction ID to resolve
         tx_id: String,
 
-        /// Kaspa node RPC URL
+        /// Kaspa node RPC URL (e.g. grpc://127.0.0.1:16110, public, public:tn10)
         #[arg(long, default_value = "grpc://127.0.0.1:16110")]
         rpc_url: String,
 
