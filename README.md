@@ -34,19 +34,17 @@ This repository contains:
 - JDK (Android Studio bundled JBR/JDK is fine)
 - Android NDK installed/configured (as required by Tauri Android builds)
 
-## Kaspa node (local) 
+## Kaspa node (local)
 
 Download `kaspad` from the official Rusty Kaspa releases:
 
 - https://github.com/kaspanet/rusty-kaspa/releases
 
 ```bash
-# Mainnet (with UTXO index)
 kaspad --utxoindex
 ```
 
 ```bash
-# Testnet-10 (with UTXO index)
 kaspad --testnet --netsuffix=10 --utxoindex
 ```
 
@@ -80,6 +78,67 @@ cargo run --release --bin kaspa_data_transfer -- --help
 
 ### Common commands
 
+Note: if you omit `--rpc-url`, the CLI uses the local default `grpc://127.0.0.1:16110`.
+
+Send (public resolver):
+```powershell
+kaspa_data_transfer send "path\\to\\file" --rpc-url public --from-private-key YOUR_PRIVATE_KEY --to-address kaspa:RECIPIENT_ADDRESS --amount 0
+```
+
+Send (local/default RPC, no public flag):
+```powershell
+kaspa_data_transfer send "path\\to\\file" --from-private-key YOUR_PRIVATE_KEY --to-address kaspa:RECIPIENT_ADDRESS --amount 0
+```
+
+Receive (public resolver):
+```powershell
+kaspa_data_transfer receive TX_ID --rpc-url public --output output.bin
+```
+
+Receive (local/default RPC, no public flag):
+```powershell
+kaspa_data_transfer receive TX_ID --output output.bin
+```
+
+Estimate (public resolver):
+```powershell
+kaspa_data_transfer estimate "path\\to\\file" --rpc-url public --from-private-key YOUR_PRIVATE_KEY --amount 0
+```
+
+Estimate (local/default RPC, no public flag):
+```powershell
+kaspa_data_transfer estimate "path\\to\\file" --from-private-key YOUR_PRIVATE_KEY --amount 0
+```
+
+Resolve tx accepting block hash (public resolver):
+```powershell
+kaspa_data_transfer tx-accepting-block-hash TX_ID --rpc-url public --wait-secs 120
+```
+
+Resolve tx accepting block hash (local/default RPC, no public flag):
+```powershell
+kaspa_data_transfer tx-accepting-block-hash TX_ID --wait-secs 120
+```
+
+### RPC URL
+
+You can connect either to a local node (`grpc://...`) or a public resolver node:
+
+- Mainnet public resolver: `--rpc-url public`
+- Testnet-10 public resolver: `--rpc-url public:tn10`
+- Local mainnet node (default): `--rpc-url grpc://127.0.0.1:16110`
+- Local testnet-10 node: `--rpc-url grpc://127.0.0.1:16210`
+
+Examples:
+
+```powershell
+kaspa_data_transfer send "path\\to\\file" --rpc-url public --from-private-key YOUR_PRIVATE_KEY --to-address kaspa:RECIPIENT_ADDRESS --amount 0
+```
+
+```powershell
+kaspa_data_transfer receive TX_ID --rpc-url public --output output.bin
+```
+
 ```powershell
 kaspa_data_transfer send "path\\to\\file" --from-private-key YOUR_PRIVATE_KEY --to-address kaspa:RECIPIENT_ADDRESS --amount 0
 ```
@@ -89,20 +148,8 @@ kaspa_data_transfer receive TX_ID --output output.bin
 ```
 
 ```powershell
-kaspa_data_transfer estimate "path\\to\\file" --from-private-key YOUR_PRIVATE_KEY
+kaspa_data_transfer send "path\\to\\file" --rpc-url public:tn10 --from-private-key YOUR_PRIVATE_KEY --to-address kaspatest:RECIPIENT_ADDRESS --amount 0
 ```
-
-```powershell
-kaspa_data_transfer tx-accepting-block-hash TX_ID
-```
-
-### RPC URL
-
-By default the CLI uses:
-
-- Mainnet: `grpc://127.0.0.1:16110`
-
-Override with `--rpc-url`:
 
 ```powershell
 kaspa_data_transfer send "path\\to\\file" --rpc-url grpc://127.0.0.1:16210 --from-private-key YOUR_PRIVATE_KEY --to-address kaspatest:RECIPIENT_ADDRESS --amount 0

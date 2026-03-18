@@ -35,15 +35,15 @@ reqwest = { version = "0.11", default-features = false, features = ["json", "rus
 urlencoding = "2.1"
 qrcode = { version = "0.11", default-features = false, features = ["svg"] }
 
-kaspa-wallet-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
-kaspa-wallet-keys = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
-kaspa-bip32 = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
-kaspa-addresses = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
-kaspa-consensus-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
-kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
-kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
-kaspa-txscript = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
-kaspa-utils = { git = "https://github.com/kaspanet/rusty-kaspa.git", rev = "73c6d5d2" }
+kaspa-wallet-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
+kaspa-wallet-keys = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
+kaspa-bip32 = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
+kaspa-addresses = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
+kaspa-consensus-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
+kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
+kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
+kaspa-txscript = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
+kaspa-utils = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
 
 secp256k1 = { version = "0.29.0", features = ["global-context", "rand-std", "serde"] }
 
