@@ -150,11 +150,11 @@ impl KaspaClient {
             })?;
 
             eprintln!("Successfully connected to Kaspa node");
-            return Ok(Self {
+            Ok(Self {
                 rpc,
                 is_public_resolver: false,
                 resolver_network_id: None,
-            });
+            })
         }
     }
 
@@ -204,8 +204,10 @@ impl KaspaClient {
             .map_err(|e| AudioTransferError::KaspaRpc(e.to_string()))?;
 
             let client = Arc::new(client);
-            let mut opts = ConnectOptions::default();
-            opts.block_async_connect = true;
+            let opts = ConnectOptions {
+                block_async_connect: true,
+                ..Default::default()
+            };
             if let Err(e) = client.connect(Some(opts)).await {
                 last_err = Some(e.to_string());
                 sleep(Duration::from_millis(250)).await;
@@ -625,8 +627,12 @@ impl KaspaClient {
         }
 
         let mut out = Vec::with_capacity(manifest.total_size as usize);
-        for i in 0..(manifest.total_chunks as usize) {
-            let Some(c) = chunks[i].as_ref() else {
+        for (i, chunk) in chunks
+            .iter()
+            .enumerate()
+            .take(manifest.total_chunks as usize)
+        {
+            let Some(c) = chunk.as_ref() else {
                 return Err(AudioTransferError::KaspaRpc(format!("Missing chunk {i}")));
             };
             out.extend_from_slice(c);
@@ -722,7 +728,7 @@ impl KaspaClient {
             ));
         }
         let chunk_data_size = (max_payload_chunk - chunk_overhead).min(MAX_CHUNK_DATA_SIZE);
-        let total_chunks = ((audio_data.len() + chunk_data_size - 1) / chunk_data_size) as u32;
+        let total_chunks = audio_data.len().div_ceil(chunk_data_size) as u32;
 
         println!(
             "Chunking file into {} chunk(s) of up to {} bytes each",
@@ -822,6 +828,7 @@ impl KaspaClient {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn send_audio_signed(
         &self,
         audio_data: &[u8],
@@ -916,7 +923,7 @@ impl KaspaClient {
             ));
         }
         let chunk_data_size = (max_payload_chunk - chunk_overhead).min(MAX_CHUNK_DATA_SIZE);
-        let total_chunks = ((audio_data.len() + chunk_data_size - 1) / chunk_data_size) as u32;
+        let total_chunks = audio_data.len().div_ceil(chunk_data_size) as u32;
 
         println!(
             "Chunking file into {} chunk(s) of up to {} bytes each",
@@ -1276,7 +1283,7 @@ impl KaspaClient {
         let mut lo: usize = 0;
         let mut hi: usize = 200_000;
         while lo < hi {
-            let mid = (lo + hi + 1) / 2;
+            let mid = (lo + hi).div_ceil(2);
             tx.payload = vec![0u8; mid];
             tx.finalize();
 
@@ -1572,7 +1579,7 @@ impl KaspaClient {
         let mut signable = kaspa_consensus_core::tx::SignableTransaction::new(tx);
         signable.entries[0] = Some(entry);
 
-        let mut signed = sign::sign(signable, keypair.clone());
+        let mut signed = sign::sign(signable, *keypair);
         signed.tx.finalize();
         Ok(signed.tx)
     }
@@ -2049,8 +2056,12 @@ impl KaspaClient {
         }
 
         let mut out = Vec::with_capacity(manifest.total_size as usize);
-        for i in 0..(manifest.total_chunks as usize) {
-            let Some(c) = chunks[i].as_ref() else {
+        for (i, chunk) in chunks
+            .iter()
+            .enumerate()
+            .take(manifest.total_chunks as usize)
+        {
+            let Some(c) = chunk.as_ref() else {
                 return Err(AudioTransferError::KaspaRpc(format!("Missing chunk {i}")));
             };
             out.extend_from_slice(c);
@@ -2146,11 +2157,7 @@ impl KaspaClient {
                 };
 
                 for bucket in response.accepted_transaction_ids.iter() {
-                    if bucket
-                        .accepted_transaction_ids
-                        .iter()
-                        .any(|id| *id == tx_id)
-                    {
+                    if bucket.accepted_transaction_ids.contains(&tx_id) {
                         Self::progress_end();
                         eprintln!(
                             "Accepting block hash (may be unavailable locally on pruned nodes): {}",

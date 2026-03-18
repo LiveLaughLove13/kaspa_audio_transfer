@@ -6,6 +6,7 @@ pub mod kaspa;
 use crate::error::Result;
 use crate::kaspa::KaspaClient;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn send_bytes(
     data: &[u8],
     from_private_key: &str,

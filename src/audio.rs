@@ -4,11 +4,11 @@ use std::io::Read;
 
 /// Reads an audio file and returns its binary content
 pub fn read_audio_file(file_path: &str) -> Result<Vec<u8>> {
-    let mut file = File::open(file_path).map_err(|e| AudioTransferError::Io(e))?;
+    let mut file = File::open(file_path).map_err(AudioTransferError::Io)?;
 
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer)
-        .map_err(|e| AudioTransferError::Io(e))?;
+        .map_err(AudioTransferError::Io)?;
 
     Ok(buffer)
 }
@@ -60,7 +60,7 @@ pub fn hex_to_binary(hex_str: &str) -> Result<Vec<u8>> {
 
 /// Saves binary data to a file
 pub fn save_audio_file(data: &[u8], file_path: &str) -> Result<()> {
-    std::fs::write(file_path, data).map_err(|e| AudioTransferError::Io(e))?;
+    std::fs::write(file_path, data).map_err(AudioTransferError::Io)?;
     Ok(())
 }
 

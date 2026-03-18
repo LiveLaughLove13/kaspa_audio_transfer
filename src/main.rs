@@ -98,6 +98,7 @@ async fn run() -> Result<()> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn send_audio(
     input_file: &str,
     from_private_key: &str,
